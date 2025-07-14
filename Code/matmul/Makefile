@@ -16,4 +16,4 @@ matmul : matmul.o
 	objdump -D $< > $@
 
 clean :
-	rm -rf matmul.out matmul.s matmul.o
+	rm -rf matmul.out matmul.s matmul.o matmul
