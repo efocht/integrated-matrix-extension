@@ -1,0 +1,19 @@
+CC  = gcc
+CXX = g++
+
+all : matmul matmul.s matmul.out
+
+matmul.out : matmul
+	perf stat -d -d -d ./matmul 2>&1 | tee matmul.out
+
+matmul : matmul.o
+	$(CXX) $< -o $@
+
+%.o : %.cc
+	$(CXX) -O2 -fno-unroll-loops -c $<
+
+%.s : %.o
+	objdump -D $< > $@
+
+clean :
+	rm -rf matmul.out matmul.s matmul.o
