@@ -858,6 +858,326 @@ void matmul_8x8x8_col_col_with_loads_and_stores
     asm("bdnz LOOP06");
 }
 
+#define load_B_packed_4x8(D)   \
+    lxvp(32, 4,   0+D);        \
+    lxvp(34, 4,  32+D);        \
+    lxvp(36, 4,  64+D);        \
+    lxvp(38, 4,  96+D);        \
+    lxvp(40, 4, 128+D);        \
+    lxvp(42, 4, 160+D);        \
+    lxvp(44, 4, 192+D);        \
+    lxvp(46, 4, 224+D);
+
+#define transpose_B_4x8()           \
+    xxpermdi(48, 32, 34, 0b00); \
+    xxpermdi(52, 32, 34, 0b11); \
+    xxpermdi(49, 36, 38, 0b00); \
+    xxpermdi(53, 36, 38, 0b11); \
+    xxpermdi(50, 40, 42, 0b00); \
+    xxpermdi(54, 40, 42, 0b11); \
+    xxpermdi(51, 44, 46, 0b00); \
+    xxpermdi(55, 44, 46, 0b11); \
+    xxpermdi(56, 33, 35, 0b00); \
+    xxpermdi(60, 33, 35, 0b11); \
+    xxpermdi(57, 37, 39, 0b00); \
+    xxpermdi(61, 37, 39, 0b11); \
+    xxpermdi(58, 41, 43, 0b00); \
+    xxpermdi(62, 41, 43, 0b11); \
+    xxpermdi(59, 45, 47, 0b00); \
+    xxpermdi(63, 45, 47, 0b11);
+
+#define load_A_packed_8x4(D)                    \
+    lxvp(32, 3,   0+D); lxvp(34, 3,  32+D); \
+    lxvp(36, 3,  64+D); lxvp(38, 3,  96+D); \
+    lxvp(40, 3, 128+D); lxvp(42, 3, 160+D); \
+    lxvp(44, 3, 192+D); lxvp(46, 3, 224+D);
+
+#define rank_4_update_8x8_first() \
+    xvf64ger(0, 32, 48);          \
+    xvf64ger(1, 32, 49);          \
+    xvf64ger(2, 32, 50);          \
+    xvf64ger(3, 32, 51);          \
+    xvf64ger(4, 34, 48);          \
+    xvf64ger(5, 34, 49);          \
+    xvf64ger(6, 34, 50);          \
+    xvf64ger(7, 34, 51);          \
+    xvf64gerpp(0, 36, 52);        \
+    xvf64gerpp(1, 36, 53);        \
+    xvf64gerpp(2, 36, 54);        \
+    xvf64gerpp(3, 36, 55);        \
+    xvf64gerpp(4, 38, 52);        \
+    xvf64gerpp(5, 38, 53);        \
+    xvf64gerpp(6, 38, 54);        \
+    xvf64gerpp(7, 38, 55);        \
+    xvf64gerpp(0, 40, 56);        \
+    xvf64gerpp(1, 40, 57);        \
+    xvf64gerpp(2, 40, 58);        \
+    xvf64gerpp(3, 40, 59);        \
+    xvf64gerpp(4, 42, 56);        \
+    xvf64gerpp(5, 42, 57);        \
+    xvf64gerpp(6, 42, 58);        \
+    xvf64gerpp(7, 42, 59);        \
+    xvf64gerpp(0, 44, 60);        \
+    xvf64gerpp(1, 44, 61);        \
+    xvf64gerpp(2, 44, 62);        \
+    xvf64gerpp(3, 44, 63);        \
+    xvf64gerpp(4, 46, 60);        \
+    xvf64gerpp(5, 46, 61);        \
+    xvf64gerpp(6, 46, 62);        \
+    xvf64gerpp(7, 46, 63);    
+
+#define rank_4_update_8x8() \
+    xvf64gerpp(0, 32, 48); \
+    xvf64gerpp(1, 32, 49); \
+    xvf64gerpp(2, 32, 50); \
+    xvf64gerpp(3, 32, 51); \
+    xvf64gerpp(4, 34, 48); \
+    xvf64gerpp(5, 34, 49); \
+    xvf64gerpp(6, 34, 50); \
+    xvf64gerpp(7, 34, 51); \
+    xvf64gerpp(0, 36, 52); \
+    xvf64gerpp(1, 36, 53); \
+    xvf64gerpp(2, 36, 54); \
+    xvf64gerpp(3, 36, 55); \
+    xvf64gerpp(4, 38, 52); \
+    xvf64gerpp(5, 38, 53); \
+    xvf64gerpp(6, 38, 54); \
+    xvf64gerpp(7, 38, 55); \
+    xvf64gerpp(0, 40, 56); \
+    xvf64gerpp(1, 40, 57); \
+    xvf64gerpp(2, 40, 58); \
+    xvf64gerpp(3, 40, 59); \
+    xvf64gerpp(4, 42, 56); \
+    xvf64gerpp(5, 42, 57); \
+    xvf64gerpp(6, 42, 58); \
+    xvf64gerpp(7, 42, 59); \
+    xvf64gerpp(0, 44, 60); \
+    xvf64gerpp(1, 44, 61); \
+    xvf64gerpp(2, 44, 62); \
+    xvf64gerpp(3, 44, 63); \
+    xvf64gerpp(4, 46, 60); \
+    xvf64gerpp(5, 46, 61); \
+    xvf64gerpp(6, 46, 62); \
+    xvf64gerpp(7, 46, 63);
+
+#define add_and_store_8x8()    \
+    xxmfacc(0);                \
+    xxmfacc(1);                \
+    xxmfacc(2);                \
+    xxmfacc(3);                \
+    xxmfacc(4);                \
+    xxmfacc(5);                \
+    xxmfacc(6);                \
+    xxmfacc(7);                \
+    lxvp(32+ 0, 5,   0);       \
+    lxvp(32+ 2, 5,  32);       \
+    lxvp(32+ 4, 5,  64);       \
+    lxvp(32+ 6, 5,  96);       \
+    lxvp(32+ 8, 5, 128);       \
+    lxvp(32+10, 5, 160);       \
+    lxvp(32+12, 5, 192);       \
+    lxvp(32+14, 5, 224);       \
+    lxvp(32+16, 5, 256);       \
+    lxvp(32+18, 5, 288);       \
+    lxvp(32+20, 5, 320);       \
+    lxvp(32+22, 5, 352);       \
+    lxvp(32+24, 5, 384);       \
+    lxvp(32+26, 5, 416);       \
+    lxvp(32+28, 5, 448);       \
+    lxvp(32+30, 5, 480);       \
+    xvadddp(32+ 0,  0, 32+ 0); \
+    xvadddp(32+ 2,  2, 32+ 2); \
+    xvadddp(32+ 4,  4, 32+ 4); \
+    xvadddp(32+ 6,  6, 32+ 6); \
+    xvadddp(32+ 8,  8, 32+ 8); \
+    xvadddp(32+10, 10, 32+10); \
+    xvadddp(32+12, 12, 32+12); \
+    xvadddp(32+14, 14, 32+14); \
+    xvadddp(32+16, 16, 32+16); \
+    xvadddp(32+18, 18, 32+18); \
+    xvadddp(32+20, 20, 32+20); \
+    xvadddp(32+22, 22, 32+22); \
+    xvadddp(32+24, 24, 32+24); \
+    xvadddp(32+26, 26, 32+26); \
+    xvadddp(32+28, 28, 32+28); \
+    xvadddp(32+30, 30, 32+30); \
+    stxvp(32+ 0, 5,   0);      \
+    stxvp(32+ 2, 5,  32);      \
+    stxvp(32+ 4, 5,  64);      \
+    stxvp(32+ 6, 5,  96);      \
+    stxvp(32+ 8, 5, 128);      \
+    stxvp(32+10, 5, 160);      \
+    stxvp(32+12, 5, 192);      \
+    stxvp(32+14, 5, 224);      \
+    stxvp(32+16, 5, 256);      \
+    stxvp(32+18, 5, 288);      \
+    stxvp(32+20, 5, 320);      \
+    stxvp(32+22, 5, 352);      \
+    stxvp(32+24, 5, 384);      \
+    stxvp(32+26, 5, 416);      \
+    stxvp(32+28, 5, 448);      \
+    stxvp(32+30, 5, 480);      \
+
+void matmul_8x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C
+)
+{
+    asm("li 6, 1000");
+    asm("mtctr 6");
+    asm("LOOP07:");
+
+    load_B_packed_4x8(0);
+    transpose_B_4x8();
+    load_A_packed_8x4(0);
+    rank_4_update_8x8_first();
+    load_B_packed_4x8(256);
+    transpose_B_4x8();
+    load_A_packed_8x4(256);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(512);
+    transpose_B_4x8();
+    load_A_packed_8x4(512);
+    rank_4_update_8x8();
+    load_B_packed_4x8(768);
+    transpose_B_4x8();
+    load_A_packed_8x4(768);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(1024);
+    transpose_B_4x8();
+    load_A_packed_8x4(1024);
+    rank_4_update_8x8();
+    load_B_packed_4x8(1280);
+    transpose_B_4x8();
+    load_A_packed_8x4(1280);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(1536);
+    transpose_B_4x8();
+    load_A_packed_8x4(1536);
+    rank_4_update_8x8();
+    load_B_packed_4x8(1792);
+    transpose_B_4x8();
+    load_A_packed_8x4(1792);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(2048);
+    transpose_B_4x8();
+    load_A_packed_8x4(2048);
+    rank_4_update_8x8();
+    load_B_packed_4x8(2304);
+    transpose_B_4x8();
+    load_A_packed_8x4(2304);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(2560);
+    transpose_B_4x8();
+    load_A_packed_8x4(2560);
+    rank_4_update_8x8();
+    load_B_packed_4x8(2816);
+    transpose_B_4x8();
+    load_A_packed_8x4(2816);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(3072);
+    transpose_B_4x8();
+    load_A_packed_8x4(3072);
+    rank_4_update_8x8();
+    load_B_packed_4x8(3328);
+    transpose_B_4x8();
+    load_A_packed_8x4(3328);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(3584);
+    transpose_B_4x8();
+    load_A_packed_8x4(3584);
+    rank_4_update_8x8();
+    load_B_packed_4x8(3840);
+    transpose_B_4x8();
+    load_A_packed_8x4(3840);
+    rank_4_update_8x8();
+
+    add_and_store_8x8();
+
+    asm("bdnz LOOP07");
+}
+
+void matmul_8x8x64_col_row_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C
+)
+{
+    asm("li 6, 1000");
+    asm("mtctr 6");
+    asm("LOOP08:");
+
+    load_B_packed_4x8(0);
+    load_A_packed_8x4(0);
+    rank_4_update_8x8_first();
+    load_B_packed_4x8(256);
+    load_A_packed_8x4(256);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(512);
+    load_A_packed_8x4(512);
+    rank_4_update_8x8();
+    load_B_packed_4x8(768);
+    load_A_packed_8x4(768);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(1024);
+    load_A_packed_8x4(1024);
+    rank_4_update_8x8();
+    load_B_packed_4x8(1280);
+    load_A_packed_8x4(1280);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(1536);
+    load_A_packed_8x4(1536);
+    rank_4_update_8x8();
+    load_B_packed_4x8(1792);
+    load_A_packed_8x4(1792);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(2048);
+    load_A_packed_8x4(2048);
+    rank_4_update_8x8();
+    load_B_packed_4x8(2304);
+    load_A_packed_8x4(2304);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(2560);
+    load_A_packed_8x4(2560);
+    rank_4_update_8x8();
+    load_B_packed_4x8(2816);
+    load_A_packed_8x4(2816);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(3072);
+    load_A_packed_8x4(3072);
+    rank_4_update_8x8();
+    load_B_packed_4x8(3328);
+    load_A_packed_8x4(3328);
+    rank_4_update_8x8();
+
+    load_B_packed_4x8(3584);
+    load_A_packed_8x4(3584);
+    rank_4_update_8x8();
+    load_B_packed_4x8(3840);
+    load_A_packed_8x4(3840);
+    rank_4_update_8x8();
+
+    add_and_store_8x8();
+
+    asm("bdnz LOOP08");
+}
+
 double now()
 {
     struct timespec ts;
@@ -904,9 +1224,12 @@ int main
 {
     const uint32_t matmul_8x8x8_col_row_count = 1000000000U;
     const uint32_t matmul_8x8x8_col_col_count = 1000000000U;
+    const uint32_t matmul_8x8x64_col_row_count = 1000000000U;
+    const uint32_t matmul_8x8x64_col_col_count = 1000000000U;
 
     volatile double elapsed;
 
+    /*
     elapsed = run_kernel(matmul_8x8x8_col_row, matmul_8x8x8_col_row_count);
     std::cout << "Time to run matmul_8x8x8_col_row " << matmul_8x8x8_col_row_count << " times = " << elapsed << " seconds" << std::endl;
 
@@ -924,6 +1247,13 @@ int main
 
     elapsed = run_kernel(matmul_8x8x8_col_col_with_loads_and_stores, matmul_8x8x8_col_col_count);
     std::cout << "Time to run matmul_8x8x8_col_col_with_loads_and_stores " << matmul_8x8x8_col_col_count << " times = " << elapsed << " seconds" << std::endl;
+    */
+
+    elapsed = run_kernel(matmul_8x8x64_col_row_with_loads_and_stores, matmul_8x8x64_col_row_count);
+    std::cout << "Time to run matmul_8x8x64_col_row_with_loads_and_stores " << matmul_8x8x64_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x64_col_row_count*8*8*64/elapsed << " Gflops)" << std::endl;
+
+    elapsed = run_kernel(matmul_8x8x64_col_col_with_loads_and_stores, matmul_8x8x64_col_col_count);
+    std::cout << "Time to run matmul_8x8x64_col_col_with_loads_and_stores " << matmul_8x8x64_col_col_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x64_col_col_count*8*8*64/elapsed << " Gflops)" << std::endl;
 
     return 0;
 }
