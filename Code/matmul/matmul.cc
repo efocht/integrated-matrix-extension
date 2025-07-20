@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <iostream>
+#include <iomanip>
 
 #define lxvp(XT, RA, D)			asm("lxvp " #XT "," #D "(" #RA ")")
 #define stxvp(XS, RA, D)		asm("stxvp " #XS "," #D "(" #RA ")")
@@ -1410,13 +1411,31 @@ double run_kernel
     return (finish - start);
 }
 
+void run_kernel_and_report
+(
+    void (kernel)(double*, double*, double*, double*),
+    uint32_t count,
+    const char* name,
+    uint32_t M,
+    uint32_t N,
+    uint32_t K
+)
+{
+    volatile double elapsed;
+    volatile double flops = 2.0*count*M*N*K;
+    elapsed = run_kernel(kernel, count);
+    std::cout << "Time to run " << std::setw(51) << name << " " << count << " times = " << std::setw(10) << elapsed << " seconds (" << std::setw(10) << flops/elapsed << " Gflops)" << std::endl;
+}
+
+#define RUN_KERNEL(kernel, count, M, N, K) run_kernel_and_report(kernel, count, #kernel, M, N, K)
+
 int main
 (
     int		argc,
     char      **argv
 )
 {
-    const uint32_t matmul_8x8x8_col_row_count   = 1000000000U;
+    const uint32_t matmul_8x8x8_col_row_count   =  100000000U;
     const uint32_t matmul_8x8x16_col_row_count  =  100000000U;
     const uint32_t matmul_8x8x24_col_row_count  =  100000000U;
     const uint32_t matmul_8x8x32_col_row_count  =  100000000U;
@@ -1425,61 +1444,28 @@ int main
     const uint32_t matmul_8x8x56_col_row_count  =  100000000U;
     const uint32_t matmul_8x8x64_col_row_count  =  100000000U;
 
-    const uint32_t matmul_8x8x8_col_col_count   = 1000000000U;
+    const uint32_t matmul_8x8x8_col_col_count   =  100000000U;
     const uint32_t matmul_8x8x64_col_col_count  =  100000000U;
     const uint32_t matmul_64x8x64_col_col_count =  100000000U;
 
     volatile double elapsed;
-
-    /*
-    elapsed = run_kernel(matmul_8x8x8_col_row, matmul_8x8x8_col_row_count);
-    std::cout << "Time to run matmul_8x8x8_col_row " << matmul_8x8x8_col_row_count << " times = " << elapsed << " seconds" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x8_col_col, matmul_8x8x8_col_col_count);
-    std::cout << "Time to run matmul_8x8x8_col_col " << matmul_8x8x8_col_col_count << " times = " << elapsed << " seconds" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x8_col_row_with_loads, matmul_8x8x8_col_row_count);
-    std::cout << "Time to run matmul_8x8x8_col_row_with_loads " << matmul_8x8x8_col_row_count << " times = " << elapsed << " seconds" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x8_col_col_with_loads, matmul_8x8x8_col_col_count);
-    std::cout << "Time to run matmul_8x8x8_col_col_with_loads " << matmul_8x8x8_col_col_count << " times = " << elapsed << " seconds" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x8_col_row_with_loads_and_stores, matmul_8x8x8_col_row_count);
-    std::cout << "Time to run matmul_8x8x8_col_row_with_loads_and_stores " << matmul_8x8x8_col_row_count << " times = " << elapsed << " seconds" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x8_col_col_with_loads_and_stores, matmul_8x8x8_col_col_count);
-    std::cout << "Time to run matmul_8x8x8_col_col_with_loads_and_stores " << matmul_8x8x8_col_col_count << " times = " << elapsed << " seconds" << std::endl;
-    */
-
-    elapsed = run_kernel(matmul_8x8x16_col_row_with_loads_and_stores, matmul_8x8x16_col_row_count);
-    std::cout << "Time to run matmul_8x8x16_col_row_with_loads_and_stores " << matmul_8x8x16_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x16_col_row_count*8*8*16/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x24_col_row_with_loads_and_stores, matmul_8x8x24_col_row_count);
-    std::cout << "Time to run matmul_8x8x24_col_row_with_loads_and_stores " << matmul_8x8x24_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x24_col_row_count*8*8*24/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x32_col_row_with_loads_and_stores, matmul_8x8x32_col_row_count);
-    std::cout << "Time to run matmul_8x8x32_col_row_with_loads_and_stores " << matmul_8x8x32_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x32_col_row_count*8*8*32/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x40_col_row_with_loads_and_stores, matmul_8x8x40_col_row_count);
-    std::cout << "Time to run matmul_8x8x40_col_row_with_loads_and_stores " << matmul_8x8x40_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x40_col_row_count*8*8*40/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x48_col_row_with_loads_and_stores, matmul_8x8x48_col_row_count);
-    std::cout << "Time to run matmul_8x8x48_col_row_with_loads_and_stores " << matmul_8x8x48_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x48_col_row_count*8*8*48/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x56_col_row_with_loads_and_stores, matmul_8x8x56_col_row_count);
-    std::cout << "Time to run matmul_8x8x56_col_row_with_loads_and_stores " << matmul_8x8x56_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x56_col_row_count*8*8*56/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x64_col_row_with_loads_and_stores, matmul_8x8x64_col_row_count);
-    std::cout << "Time to run matmul_8x8x64_col_row_with_loads_and_stores " << matmul_8x8x64_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x64_col_row_count*8*8*64/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x64_col_col_with_loads_and_stores, matmul_8x8x64_col_col_count);
-    std::cout << "Time to run matmul_8x8x64_col_col_with_loads_and_stores " << matmul_8x8x64_col_col_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x64_col_col_count*8*8*64/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_8x8x64_col_col_with_loads_and_stores_store_B, matmul_8x8x64_col_col_count);
-    std::cout << "Time to run matmul_8x8x64_col_col_with_loads_and_stores_store_B " << matmul_8x8x64_col_col_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x64_col_col_count*8*8*64/elapsed << " Gflops)" << std::endl;
-
-    elapsed = run_kernel(matmul_64x8x64_col_col_with_loads_and_stores, matmul_64x8x64_col_col_count);
-    std::cout << "Time to run matmul_64x8x64_col_col_with_loads_and_stores " << matmul_64x8x64_col_col_count << " times = " << elapsed << " seconds (" << 2.0*matmul_64x8x64_col_col_count*64*8*64/elapsed << " Gflops)" << std::endl;
+    
+    RUN_KERNEL(matmul_8x8x8_col_row                               , matmul_8x8x8_col_row_count  ,  8, 8,  8);
+    RUN_KERNEL(matmul_8x8x8_col_col                               , matmul_8x8x8_col_col_count  ,  8, 8,  8);
+    RUN_KERNEL(matmul_8x8x8_col_row_with_loads                    , matmul_8x8x8_col_row_count  ,  8, 8,  8);
+    RUN_KERNEL(matmul_8x8x8_col_col_with_loads                    , matmul_8x8x8_col_col_count  ,  8, 8,  8);
+    RUN_KERNEL(matmul_8x8x8_col_row_with_loads_and_stores         , matmul_8x8x8_col_row_count  ,  8, 8,  8);
+    RUN_KERNEL(matmul_8x8x8_col_col_with_loads_and_stores         , matmul_8x8x8_col_col_count  ,  8, 8,  8);
+    RUN_KERNEL(matmul_8x8x16_col_row_with_loads_and_stores        , matmul_8x8x16_col_row_count ,  8, 8, 16);
+    RUN_KERNEL(matmul_8x8x24_col_row_with_loads_and_stores        , matmul_8x8x24_col_row_count ,  8, 8, 24);
+    RUN_KERNEL(matmul_8x8x32_col_row_with_loads_and_stores        , matmul_8x8x32_col_row_count ,  8, 8, 32);
+    RUN_KERNEL(matmul_8x8x40_col_row_with_loads_and_stores        , matmul_8x8x40_col_row_count ,  8, 8, 40);
+    RUN_KERNEL(matmul_8x8x48_col_row_with_loads_and_stores        , matmul_8x8x48_col_row_count ,  8, 8, 48);
+    RUN_KERNEL(matmul_8x8x56_col_row_with_loads_and_stores        , matmul_8x8x56_col_row_count ,  8, 8, 56);
+    RUN_KERNEL(matmul_8x8x64_col_row_with_loads_and_stores        , matmul_8x8x64_col_row_count ,  8, 8, 64);
+    RUN_KERNEL(matmul_8x8x64_col_col_with_loads_and_stores        , matmul_8x8x64_col_col_count ,  8, 8, 64);
+    RUN_KERNEL(matmul_8x8x64_col_col_with_loads_and_stores_store_B, matmul_8x8x64_col_col_count ,  8, 8, 64);
+    RUN_KERNEL(matmul_64x8x64_col_col_with_loads_and_stores       , matmul_64x8x64_col_col_count, 64, 8, 64);
 
     return 0;
 }
