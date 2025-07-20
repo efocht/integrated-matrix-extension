@@ -14,11 +14,12 @@ void matmul_8x8x8_col_col
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP02:");
 
     xxpermdi(48, 32, 34, 0b00);
@@ -140,11 +141,12 @@ void matmul_8x8x8_col_row
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP01:");
 
     xvf64ger(0, 32, 48);
@@ -226,11 +228,12 @@ void matmul_8x8x8_col_row_with_loads
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP03:");
 
     lxvp(32, 3,   0); lxvp(34, 3,  32);
@@ -330,11 +333,12 @@ void matmul_8x8x8_col_row_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP05:");
 
     lxvp(32, 3,   0); lxvp(34, 3,  32);
@@ -494,11 +498,12 @@ void matmul_8x8x8_col_col_with_loads
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP04:");
 
     lxvp(32, 4,   0); 
@@ -648,11 +653,12 @@ void matmul_8x8x8_col_col_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP06:");
 
     lxvp(32, 4,   0); 
@@ -886,6 +892,16 @@ void matmul_8x8x8_col_col_with_loads_and_stores
     xxpermdi(59, 45, 47, 0b00); \
     xxpermdi(63, 45, 47, 0b11);
 
+#define store_B_packed_4x8(D)   \
+    stxvp(48, 6,   0+D);        \
+    stxvp(50, 6,  32+D);        \
+    stxvp(52, 6,  64+D);        \
+    stxvp(54, 6,  96+D);        \
+    stxvp(56, 6, 128+D);        \
+    stxvp(58, 6, 160+D);        \
+    stxvp(60, 6, 192+D);        \
+    stxvp(62, 6, 224+D);
+
 #define load_A_packed_8x4(D)                    \
     lxvp(32, 3,   0+D); lxvp(34, 3,  32+D); \
     lxvp(36, 3,  64+D); lxvp(38, 3,  96+D); \
@@ -1018,93 +1034,47 @@ void matmul_8x8x8_col_col_with_loads_and_stores
     stxvp(32+28, 5, 448);      \
     stxvp(32+30, 5, 480);      \
 
-void matmul_8x8x64_col_col_with_loads_and_stores
-(
-    double *A,
-    double *B,
-    double *C
-)
-{
-    asm("li 6, 1000");
-    asm("mtctr 6");
-    asm("LOOP07:");
-
-    load_B_packed_4x8(0);
-    transpose_B_4x8();
-    load_A_packed_8x4(0);
-    rank_4_update_8x8_first();
-    load_B_packed_4x8(256);
-    transpose_B_4x8();
-    load_A_packed_8x4(256);
+#define rank_8_update_8x8_transpose_B_first(D) \
+    load_B_packed_4x8((D+0));                  \
+    transpose_B_4x8();                         \
+    load_A_packed_8x4((D+0));                  \
+    rank_4_update_8x8_first();                 \
+    load_B_packed_4x8((D+256));                \
+    transpose_B_4x8();                         \
+    load_A_packed_8x4((D+256));                \
     rank_4_update_8x8();
 
-    load_B_packed_4x8(512);
-    transpose_B_4x8();
-    load_A_packed_8x4(512);
-    rank_4_update_8x8();
-    load_B_packed_4x8(768);
-    transpose_B_4x8();
-    load_A_packed_8x4(768);
-    rank_4_update_8x8();
-
-    load_B_packed_4x8(1024);
-    transpose_B_4x8();
-    load_A_packed_8x4(1024);
-    rank_4_update_8x8();
-    load_B_packed_4x8(1280);
-    transpose_B_4x8();
-    load_A_packed_8x4(1280);
+#define rank_8_update_8x8_transpose_B(D) \
+    load_B_packed_4x8((D+0));            \
+    transpose_B_4x8();                   \
+    load_A_packed_8x4((D+0));            \
+    rank_4_update_8x8();                 \
+    load_B_packed_4x8((D+256));          \
+    transpose_B_4x8();                   \
+    load_A_packed_8x4((D+256));          \
     rank_4_update_8x8();
 
-    load_B_packed_4x8(1536);
-    transpose_B_4x8();
-    load_A_packed_8x4(1536);
-    rank_4_update_8x8();
-    load_B_packed_4x8(1792);
-    transpose_B_4x8();
-    load_A_packed_8x4(1792);
-    rank_4_update_8x8();
-
-    load_B_packed_4x8(2048);
-    transpose_B_4x8();
-    load_A_packed_8x4(2048);
-    rank_4_update_8x8();
-    load_B_packed_4x8(2304);
-    transpose_B_4x8();
-    load_A_packed_8x4(2304);
+#define rank_8_update_8x8_transpose_and_store_B_first(D) \
+    load_B_packed_4x8((D+0));                  \
+    transpose_B_4x8();                         \
+    store_B_packed_4x8((D+0));		       \
+    load_A_packed_8x4((D+0));                  \
+    rank_4_update_8x8_first();                 \
+    load_B_packed_4x8((D+256));                \
+    transpose_B_4x8();                         \
+    store_B_packed_4x8((D+256));	       \
+    load_A_packed_8x4((D+256));                \
     rank_4_update_8x8();
 
-    load_B_packed_4x8(2560);
-    transpose_B_4x8();
-    load_A_packed_8x4(2560);
+#define rank_8_update_8x8_transpose_and_store_B(D) \
+    load_B_packed_4x8((D+0));            \
+    transpose_B_4x8();                   \
+    load_A_packed_8x4((D+0));            \
+    rank_4_update_8x8();                 \
+    load_B_packed_4x8((D+256));          \
+    transpose_B_4x8();                   \
+    load_A_packed_8x4((D+256));          \
     rank_4_update_8x8();
-    load_B_packed_4x8(2816);
-    transpose_B_4x8();
-    load_A_packed_8x4(2816);
-    rank_4_update_8x8();
-
-    load_B_packed_4x8(3072);
-    transpose_B_4x8();
-    load_A_packed_8x4(3072);
-    rank_4_update_8x8();
-    load_B_packed_4x8(3328);
-    transpose_B_4x8();
-    load_A_packed_8x4(3328);
-    rank_4_update_8x8();
-
-    load_B_packed_4x8(3584);
-    transpose_B_4x8();
-    load_A_packed_8x4(3584);
-    rank_4_update_8x8();
-    load_B_packed_4x8(3840);
-    transpose_B_4x8();
-    load_A_packed_8x4(3840);
-    rank_4_update_8x8();
-
-    add_and_store_8x8();
-
-    asm("bdnz LOOP07");
-}
 
 #define rank_8_update_8x8_first(D) \
     load_B_packed_4x8((D+0));      \
@@ -1126,11 +1096,12 @@ void matmul_8x8x16_col_row_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP13:");
 
     rank_8_update_8x8_first(0);
@@ -1145,11 +1116,12 @@ void matmul_8x8x24_col_row_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP14:");
 
     rank_8_update_8x8_first(0);
@@ -1165,11 +1137,12 @@ void matmul_8x8x32_col_row_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP11:");
 
     rank_8_update_8x8_first(0);
@@ -1186,11 +1159,12 @@ void matmul_8x8x40_col_row_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP12:");
 
     rank_8_update_8x8_first(0);
@@ -1208,11 +1182,12 @@ void matmul_8x8x48_col_row_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP09:");
 
     rank_8_update_8x8_first(0);
@@ -1231,11 +1206,12 @@ void matmul_8x8x56_col_row_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP10:");
 
     rank_8_update_8x8_first(0);
@@ -1255,11 +1231,12 @@ void matmul_8x8x64_col_row_with_loads_and_stores
 (
     double *A,
     double *B,
-    double *C
+    double *C,
+    double *D
 )
 {
-    asm("li 6, 1000");
-    asm("mtctr 6");
+    asm("li 7, 1000");
+    asm("mtctr 7");
     asm("LOOP08:");
 
     load_B_packed_4x8(0);
@@ -1323,6 +1300,76 @@ void matmul_8x8x64_col_row_with_loads_and_stores
     asm("bdnz LOOP08");
 }
 
+void matmul_8x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    asm("li 7, 1000");
+    asm("mtctr 7");
+    asm("LOOP15:");
+
+    rank_8_update_8x8_transpose_B_first(0);
+    rank_8_update_8x8_transpose_B( 512);
+    rank_8_update_8x8_transpose_B(1024);
+    rank_8_update_8x8_transpose_B(1536);
+    rank_8_update_8x8_transpose_B(2048);
+    rank_8_update_8x8_transpose_B(2560);
+    rank_8_update_8x8_transpose_B(3072);
+    rank_8_update_8x8_transpose_B(3584);
+
+    add_and_store_8x8();
+
+    asm("bdnz LOOP15");
+}
+
+void matmul_8x8x64_col_col_with_loads_and_stores_store_B
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    asm("li 7, 1000");
+    asm("mtctr 7");
+    asm("LOOP16:");
+
+    rank_8_update_8x8_transpose_and_store_B_first(0);
+    rank_8_update_8x8_transpose_and_store_B( 512);
+    rank_8_update_8x8_transpose_and_store_B(1024);
+    rank_8_update_8x8_transpose_and_store_B(1536);
+    rank_8_update_8x8_transpose_and_store_B(2048);
+    rank_8_update_8x8_transpose_and_store_B(2560);
+    rank_8_update_8x8_transpose_and_store_B(3072);
+    rank_8_update_8x8_transpose_and_store_B(3584);
+
+    add_and_store_8x8();
+
+    asm("bdnz LOOP16");
+}
+
+void matmul_64x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    matmul_8x8x64_col_col_with_loads_and_stores_store_B(A+   0, B, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+ 512, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1024, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1536, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+2048, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+2560, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+3072, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+3584, D, C, D);
+}
+
 double now()
 {
     struct timespec ts;
@@ -1336,7 +1383,7 @@ double *C = 0;
 
 double run_kernel
 (
-    void (kernel)(double*, double*, double*),
+    void (kernel)(double*, double*, double*, double*),
     uint32_t count
 )
 {
@@ -1344,16 +1391,18 @@ double run_kernel
     double *A = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) A[i] = drand48() - 0.5;
     double *B = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) B[i] = drand48() - 0.5;
     double *C = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) C[i] = drand48() - 0.5;
+    double *D = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) D[i] = drand48() - 0.5;
 
     volatile double start, finish;
 
     start = now();
     for(; count; count -= 1000)
     {
-	kernel(A,B,C);
+	kernel(A,B,C,D);
     }
     finish = now();
 
+    free(D);
     free(C);
     free(B);
     free(A);
@@ -1367,17 +1416,18 @@ int main
     char      **argv
 )
 {
-    const uint32_t matmul_8x8x8_col_row_count  = 1000000000U;
-    const uint32_t matmul_8x8x16_col_row_count =  100000000U;
-    const uint32_t matmul_8x8x24_col_row_count =  100000000U;
-    const uint32_t matmul_8x8x32_col_row_count =  100000000U;
-    const uint32_t matmul_8x8x40_col_row_count =  100000000U;
-    const uint32_t matmul_8x8x48_col_row_count =  100000000U;
-    const uint32_t matmul_8x8x56_col_row_count =  100000000U;
-    const uint32_t matmul_8x8x64_col_row_count =  100000000U;
+    const uint32_t matmul_8x8x8_col_row_count   = 1000000000U;
+    const uint32_t matmul_8x8x16_col_row_count  =  100000000U;
+    const uint32_t matmul_8x8x24_col_row_count  =  100000000U;
+    const uint32_t matmul_8x8x32_col_row_count  =  100000000U;
+    const uint32_t matmul_8x8x40_col_row_count  =  100000000U;
+    const uint32_t matmul_8x8x48_col_row_count  =  100000000U;
+    const uint32_t matmul_8x8x56_col_row_count  =  100000000U;
+    const uint32_t matmul_8x8x64_col_row_count  =  100000000U;
 
-    const uint32_t matmul_8x8x8_col_col_count  = 1000000000U;
-    const uint32_t matmul_8x8x64_col_col_count =  100000000U;
+    const uint32_t matmul_8x8x8_col_col_count   = 1000000000U;
+    const uint32_t matmul_8x8x64_col_col_count  =  100000000U;
+    const uint32_t matmul_64x8x64_col_col_count =  100000000U;
 
     volatile double elapsed;
 
@@ -1422,10 +1472,14 @@ int main
     elapsed = run_kernel(matmul_8x8x64_col_row_with_loads_and_stores, matmul_8x8x64_col_row_count);
     std::cout << "Time to run matmul_8x8x64_col_row_with_loads_and_stores " << matmul_8x8x64_col_row_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x64_col_row_count*8*8*64/elapsed << " Gflops)" << std::endl;
 
-    /*
     elapsed = run_kernel(matmul_8x8x64_col_col_with_loads_and_stores, matmul_8x8x64_col_col_count);
     std::cout << "Time to run matmul_8x8x64_col_col_with_loads_and_stores " << matmul_8x8x64_col_col_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x64_col_col_count*8*8*64/elapsed << " Gflops)" << std::endl;
-    */
+
+    elapsed = run_kernel(matmul_8x8x64_col_col_with_loads_and_stores_store_B, matmul_8x8x64_col_col_count);
+    std::cout << "Time to run matmul_8x8x64_col_col_with_loads_and_stores_store_B " << matmul_8x8x64_col_col_count << " times = " << elapsed << " seconds (" << 2.0*matmul_8x8x64_col_col_count*8*8*64/elapsed << " Gflops)" << std::endl;
+
+    elapsed = run_kernel(matmul_64x8x64_col_col_with_loads_and_stores, matmul_64x8x64_col_col_count);
+    std::cout << "Time to run matmul_64x8x64_col_col_with_loads_and_stores " << matmul_64x8x64_col_col_count << " times = " << elapsed << " seconds (" << 2.0*matmul_64x8x64_col_col_count*64*8*64/elapsed << " Gflops)" << std::endl;
 
     return 0;
 }
