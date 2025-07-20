@@ -4,7 +4,7 @@ CXX = g++
 all : matmul matmul.s matmul.out
 
 matmul.out : matmul
-	perf stat -d -d -d ./matmul 2>&1 | tee matmul.out
+	perf stat -d -d -d numactl -C 8 ./matmul 2>&1 | tee matmul.out
 
 matmul : matmul.o
 	$(CXX) $< -o $@

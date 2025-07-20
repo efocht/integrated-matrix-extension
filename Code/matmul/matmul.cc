@@ -1353,6 +1353,93 @@ void matmul_8x8x64_col_col_with_loads_and_stores_store_B
     asm("bdnz LOOP16");
 }
 
+void matmul_16x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    matmul_8x8x64_col_col_with_loads_and_stores_store_B(A+   0, B, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+ 512, D, C, D);
+}
+
+void matmul_24x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    matmul_8x8x64_col_col_with_loads_and_stores_store_B(A+   0, B, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+ 512, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1024, D, C, D);
+}
+
+void matmul_32x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    matmul_8x8x64_col_col_with_loads_and_stores_store_B(A+   0, B, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+ 512, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1024, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1536, D, C, D);
+}
+
+void matmul_40x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    matmul_8x8x64_col_col_with_loads_and_stores_store_B(A+   0, B, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+ 512, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1024, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1536, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+2048, D, C, D);
+}
+
+void matmul_48x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    matmul_8x8x64_col_col_with_loads_and_stores_store_B(A+   0, B, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+ 512, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1024, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1536, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+2048, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+2560, D, C, D);
+}
+
+void matmul_56x8x64_col_col_with_loads_and_stores
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    matmul_8x8x64_col_col_with_loads_and_stores_store_B(A+   0, B, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+ 512, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1024, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+1536, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+2048, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+2560, D, C, D);
+    matmul_8x8x64_col_row_with_loads_and_stores        (A+3072, D, C, D);
+}
+
 void matmul_64x8x64_col_col_with_loads_and_stores
 (
     double *A,
@@ -1424,7 +1511,8 @@ void run_kernel_and_report
     volatile double elapsed;
     volatile double flops = 2.0*count*M*N*K;
     elapsed = run_kernel(kernel, count);
-    std::cout << "Time to run " << std::setw(51) << name << " " << count << " times = " << std::setw(10) << elapsed << " seconds (" << std::setw(10) << flops/elapsed << " Gflops)" << std::endl;
+    std::cout << std::setprecision(6);
+    std::cout << "Time to run " << std::setw(51) << name << " " << count << " times = " << std::setw(10) << std::fixed << elapsed << " seconds (" << std::setw(10) << std::scientific << flops/elapsed << " flops)" << std::endl;
 }
 
 #define RUN_KERNEL(kernel, count, M, N, K) run_kernel_and_report(kernel, count, #kernel, M, N, K)
@@ -1465,6 +1553,12 @@ int main
     RUN_KERNEL(matmul_8x8x64_col_row_with_loads_and_stores        , matmul_8x8x64_col_row_count ,  8, 8, 64);
     RUN_KERNEL(matmul_8x8x64_col_col_with_loads_and_stores        , matmul_8x8x64_col_col_count ,  8, 8, 64);
     RUN_KERNEL(matmul_8x8x64_col_col_with_loads_and_stores_store_B, matmul_8x8x64_col_col_count ,  8, 8, 64);
+    RUN_KERNEL(matmul_16x8x64_col_col_with_loads_and_stores       , matmul_64x8x64_col_col_count, 16, 8, 64);
+    RUN_KERNEL(matmul_24x8x64_col_col_with_loads_and_stores       , matmul_64x8x64_col_col_count, 24, 8, 64);
+    RUN_KERNEL(matmul_32x8x64_col_col_with_loads_and_stores       , matmul_64x8x64_col_col_count, 32, 8, 64);
+    RUN_KERNEL(matmul_40x8x64_col_col_with_loads_and_stores       , matmul_64x8x64_col_col_count, 40, 8, 64);
+    RUN_KERNEL(matmul_48x8x64_col_col_with_loads_and_stores       , matmul_64x8x64_col_col_count, 48, 8, 64);
+    RUN_KERNEL(matmul_56x8x64_col_col_with_loads_and_stores       , matmul_64x8x64_col_col_count, 56, 8, 64);
     RUN_KERNEL(matmul_64x8x64_col_col_with_loads_and_stores       , matmul_64x8x64_col_col_count, 64, 8, 64);
 
     return 0;
