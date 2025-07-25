@@ -3,6 +3,12 @@
 #include <iostream>
 #include <iomanip>
 
+// helper macros
+#define EXPAND(x)  _EXPAND(x)
+#define _EXPAND(x) #x
+
+// assembly instructions
+#define li(RT, SI)			asm("li " #RT "," EXPAND(SI))
 #define lxvp(XT, RA, D)			asm("lxvp " #XT "," #D "(" #RA ")")
 #define stxvp(XS, RA, D)		asm("stxvp " #XS "," #D "(" #RA ")")
 #define xvf64ger(AT, XA, XB)		asm("xvf64ger " #AT "," #XA "," #XB)
@@ -10,6 +16,9 @@
 #define xxpermdi(XT, XA, XB, IM)	asm("xxpermdi " #XT "," #XA "," #XB "," #IM)
 #define xxmfacc(XT)			asm("xxmfacc " #XT)
 #define xvadddp(XT, XA, XB)		asm("xvadddp " #XT "," #XA "," #XB)
+
+// innermost loop count
+#define COUNT 1000
 
 void matmul_8x8x8_col_col
 (
@@ -19,7 +28,7 @@ void matmul_8x8x8_col_col
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP02:");
 
@@ -146,7 +155,7 @@ void matmul_8x8x8_col_row
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP01:");
 
@@ -233,7 +242,7 @@ void matmul_8x8x8_col_row_with_loads
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP03:");
 
@@ -338,7 +347,7 @@ void matmul_8x8x8_col_row_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP05:");
 
@@ -503,7 +512,7 @@ void matmul_8x8x8_col_col_with_loads
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP04:");
 
@@ -658,7 +667,7 @@ void matmul_8x8x8_col_col_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP06:");
 
@@ -1101,7 +1110,7 @@ void matmul_8x8x16_col_row_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP13:");
 
@@ -1121,7 +1130,7 @@ void matmul_8x8x24_col_row_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP14:");
 
@@ -1142,7 +1151,7 @@ void matmul_8x8x32_col_row_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP11:");
 
@@ -1164,7 +1173,7 @@ void matmul_8x8x40_col_row_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP12:");
 
@@ -1187,7 +1196,7 @@ void matmul_8x8x48_col_row_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP09:");
 
@@ -1211,7 +1220,7 @@ void matmul_8x8x56_col_row_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP10:");
 
@@ -1236,7 +1245,7 @@ void matmul_8x8x64_col_row_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP08:");
 
@@ -1309,7 +1318,7 @@ void matmul_8x8x64_col_col_with_loads_and_stores
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP15:");
 
@@ -1335,7 +1344,7 @@ void matmul_8x8x64_col_col_with_loads_and_stores_store_B
     double *D
 )
 {
-    asm("li 7, 1000");
+    li(7, COUNT);
     asm("mtctr 7");
     asm("LOOP16:");
 
@@ -1484,7 +1493,7 @@ double run_kernel
     volatile double start, finish;
 
     start = now();
-    for(; count; count -= 1000)
+    for(; count; count -= COUNT)
     {
 	kernel(A,B,C,D);
     }
