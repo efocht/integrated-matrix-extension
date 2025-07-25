@@ -339,6 +339,39 @@ void matmul_8x8x8_col_row_with_loads
     asm("bdnz LOOP03");
 }
 
+void matmul_8x8x8_col_row_just_loads
+(
+    double *A,
+    double *B,
+    double *C,
+    double *D
+)
+{
+    li(7, COUNT);
+    asm("mtctr 7");
+    asm("LOOP17:");
+
+    lxvp(32, 3,   0); lxvp(34, 3,  32);
+    lxvp(48, 4,   0); lxvp(50, 4,  32);
+    lxvp(36, 3,  64); lxvp(38, 3,  96);
+    lxvp(52, 4,  64); lxvp(54, 4,  96);
+    lxvp(40, 3, 128); lxvp(42, 3, 160);
+    lxvp(56, 4, 128); lxvp(58, 4, 160);
+    lxvp(44, 3, 192); lxvp(46, 3, 224);
+    lxvp(60, 4, 192); lxvp(62, 4, 224);
+
+    lxvp(32, 3,   0+256); lxvp(34, 3,  32+256);
+    lxvp(48, 4,   0+256); lxvp(50, 4,  32+256);
+    lxvp(36, 3,  64+256); lxvp(38, 3,  96+256);
+    lxvp(52, 4,  64+256); lxvp(54, 4,  96+256);
+    lxvp(40, 3, 128+256); lxvp(42, 3, 160+256);
+    lxvp(56, 4, 128+256); lxvp(58, 4, 160+256);
+    lxvp(44, 3, 192+256); lxvp(46, 3, 224+256);
+    lxvp(60, 4, 192+256); lxvp(62, 4, 224+256);
+
+    asm("bdnz LOOP17");
+}
+
 void matmul_8x8x8_col_row_with_loads_and_stores
 (
     double *A,
@@ -1547,8 +1580,11 @@ int main
 
     volatile double elapsed;
     
+    std::cout << "=========================================================================================================================" << std::endl;
+
     RUN_KERNEL(matmul_8x8x8_col_row                               , matmul_8x8x8_col_row_count  ,  8, 8,  8);
     RUN_KERNEL(matmul_8x8x8_col_col                               , matmul_8x8x8_col_col_count  ,  8, 8,  8);
+    RUN_KERNEL(matmul_8x8x8_col_row_just_loads                    , matmul_8x8x8_col_row_count  ,  8, 8,  8);
     RUN_KERNEL(matmul_8x8x8_col_row_with_loads                    , matmul_8x8x8_col_row_count  ,  8, 8,  8);
     RUN_KERNEL(matmul_8x8x8_col_col_with_loads                    , matmul_8x8x8_col_col_count  ,  8, 8,  8);
     RUN_KERNEL(matmul_8x8x8_col_row_with_loads_and_stores         , matmul_8x8x8_col_row_count  ,  8, 8,  8);
