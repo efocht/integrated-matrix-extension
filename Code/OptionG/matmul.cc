@@ -19,50 +19,54 @@ class RV_t
 	virtual void vle64(u32 vd, double *A) = 0;
 	virtual void vse64(u32 vs, double *A) = 0;
 	virtual u32& SEW() = 0;
+	virtual u32& LMUL() = 0;
 	virtual s64& X(u32 rs) = 0;
+	virtual u32 VLEN() const = 0;
+	virtual u32 lambda() const = 0;
 	virtual u32 VLENE() const = 0;
 	virtual u32 mu() const = 0;
 	virtual u32 nu() const = 0;
 };
 
-template<u32 VLEN, u32 lambda>
+template<u32 VLEN_, u32 lambda_>
 class RVIME_t : public RV_t
 {
     private:
 	u32	SEW_;
+	u32     LMUL_;
 	bool	altfmt_;
 	union
 	{
-	    double f64[VLEN/64];
-	    float  f32[VLEN/32];
-	    u64    i64[VLEN/64];
+	    double f64[VLEN_/64];
+	    float  f32[VLEN_/32];
+	    u64    i64[VLEN_/64];
 	} VR[32];
 	s64 X_[32];
 
 	void vfmmacc_fp64(u32 vd, u32 vs1, u32 vs2)
 	{
-	    u32 L = VLEN/SEW_;
-	    u32 m = L/lambda;
-	    u32 n = m/lambda;
+	    u32 L = VLEN_/SEW_;
+	    u32 m = L/lambda_;
+	    u32 n = m/lambda_;
 	    std::cout << "Executing double-precision vfmmacc : " << "vd = " << vd << ", vs1 = " << vs1 << ", vs2 = " << vs2 << ", L = " << L << ", m = " << m << ", n = " << n << std::endl;
 
-	    for (u32 k=0; k<lambda; k++)
+	    for (u32 k=0; k<lambda_; k++)
 	    {
 		for (u32 i=0; i<m; i++)
 		    for (u32 j=0; j<m; j++)
 		    {
-			std::cout << "Computing VR[" << vd + j/lambda << "].f64[" << i + m*(j%lambda) << "] += VR[" << vs1 << "].f64[" << i + m*k << "] * VR[" << vs2 << "].f64[" << j + m*k << "]" << std::endl;
-			VR[vd + j/lambda].f64[i + m*(j%lambda)] += VR[vs1].f64[i + m*k] * VR[vs2].f64[j + m*k]; 
+			std::cout << "Computing VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] += VR[" << vs1 << "].f64[" << i + m*k << "] * VR[" << vs2 << "].f64[" << j + m*k << "]" << std::endl;
+			VR[vd + j/lambda_].f64[i + m*(j%lambda_)] += VR[vs1].f64[i + m*k] * VR[vs2].f64[j + m*k]; 
 			std::cout << "VR[" << vs1 << "].f64[" << i + m*k << "] = " << VR[vs1].f64[i + m*k] << std::endl;
 			std::cout << "VR[" << vs2 << "].f64[" << j + m*k << "] = " << VR[vs2].f64[j + m*k] << std::endl;
-			std::cout << "VR[" << vd + j/lambda << "].f64[" << i + m*(j%lambda) << "] = " << VR[vd + j/lambda].f64[i + m*(j%lambda)] << std::endl;
+			std::cout << "VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] = " << VR[vd + j/lambda_].f64[i + m*(j%lambda_)] << std::endl;
 		    }
 	    }
 	}
 
 	void vxor_i64(u32 vd, u32 vs1, u32 vs2)
 	{
-	    u32 L = VLEN/SEW_;
+	    u32 L = VLEN_/SEW_;
 	    for (u32 i=0; i<L; i++) VR[vd].i64[i] = VR[vs1].i64[i] ^ VR[vs2].i64[i];
 	}
 
@@ -72,16 +76,31 @@ class RVIME_t : public RV_t
 	    return SEW_;
 	}
 
+	u32& LMUL()
+	{
+	    return LMUL_;
+	}
+
+	u32 VLEN() const
+	{
+	    return VLEN_;
+	}
+
+	u32 lambda() const
+	{
+	    return lambda_;
+	}
+
 	u32 mu() const
 	{
-	    u32 L = VLEN/SEW_;
-	    return L/lambda;
+	    u32 L = VLEN_/SEW_;
+	    return L/lambda_;
 	}
 
 	u32 nu() const
 	{
-	    u32 L = VLEN/SEW_;
-	    return L/lambda;
+	    u32 L = VLEN_/SEW_;
+	    return L/lambda_;
 	}
 
 	s64& X(u32 rs)
@@ -117,20 +136,20 @@ class RVIME_t : public RV_t
 	void vle64(u32 vd, double *A)
 	{
 	    std::cout << "Loading VR[" << vd << "]" << std::endl;
-	    u32 L = VLEN/SEW_;
+	    u32 L = VLEN_/SEW_;
 	    for (u32 i=0; i<L; i++) VR[vd].f64[i] = A[i];
 	}
 
 	void vse64(u32 vs, double *A)
 	{
 	    std::cout << "Storing VR[" << vs << "]" << std::endl;
-	    u32 L = VLEN/SEW_;
+	    u32 L = VLEN_/SEW_;
 	    for (u32 i=0; i<L; i++) A[i] = VR[vs].f64[i];
 	}
 
 	u32 VLENE() const
 	{
-	    return VLEN/SEW_;
+	    return VLEN_/SEW_;
 	}
 };
 
@@ -141,6 +160,7 @@ class vsetvli_t
 	void operator()(u32 rd, u32 rs1, u32 sew, u32 lmul, u32 ta, u32 ma)
 	{
 	    RV->SEW() = sew;
+	    RV->LMUL() = lmul;
 	    RV->X(rd) = RV->VLENE();
 	}
 };
@@ -168,7 +188,8 @@ class vle64_t
     public:
 	void v(u32 vd, double *A)
 	{
-	    return RV->vle64(vd, A);
+	    for (u32 i=0; i<RV->LMUL(); i++) RV->vle64(vd + i, A + i*RV->VLENE());
+	    return;
 	}
 };
 
@@ -177,7 +198,8 @@ class vse64_t
     public:
 	void v(u32 vs, double *A)
 	{
-	    return RV->vse64(vs, A);
+	    for (u32 i=0; i<RV->LMUL(); i++) RV->vse64(vs + i, A + i*RV->VLENE());
+	    return;
 	}
 };
 
@@ -190,13 +212,14 @@ vse64_t   vse64;
 void microgemm
 (
     u32     K,
-    double  alpha,
     double *A,
     double *B,
     double *C,
-    u32     ldc
+    u32     N
 )
 {
+    assert(0 == K % RV->lambda());
+
     vsetvli(5, 0, 64, 1, true, true);
     for (u32 r=16; r<32; r++) vxor.vv(r, r, r);
     for (u32 k=0; k<K; k++)
@@ -207,7 +230,7 @@ void microgemm
 	A += RV->X(5);
 	B += RV->X(5);
     }
-    vse64.v(16, C);
+    for (u32 i=0; i<N; i++) vse64.v(16 + i, C + i*RV->VLENE());
 }
 
 double now()
@@ -223,6 +246,7 @@ bool run_microgemm
     u32 K
 )
 {
+    assert(lambda == 1);
     RVIME_t<VLEN, lambda> RVIME; RV = &RVIME;
 
     // Find the geometry of the microgemm
@@ -238,7 +262,7 @@ bool run_microgemm
     double *C = new double[M*N]; for (u32 i=0; i<M*N; i++) C[i] = drand48() - 0.5;
 
     // Invoke the microgemm kernel
-    microgemm(K, 1.0, A, B, C, M);
+    microgemm(K, A, B, C, N);
 
     // Check the result
     for (u32 j=0; j<N; j++)
@@ -318,9 +342,26 @@ int main
 )
 {
     std::cout << "=========================================================================================================================" << std::endl;
-    run_microgemm< 64, 1>(2);
-    run_microgemm<128, 1>(1);
-    run_microgemm<256, 1>(1);
+    run_microgemm<  64, 1>(1);
+    run_microgemm<  64, 1>(2);
+    run_microgemm<  64, 1>(4);
+    run_microgemm<  64, 1>(8);
+    run_microgemm< 128, 1>(1);
+    run_microgemm< 128, 1>(2);
+    run_microgemm< 128, 1>(4);
+    run_microgemm< 128, 1>(8);
+    run_microgemm< 256, 1>(1);
+    run_microgemm< 256, 1>(2);
+    run_microgemm< 256, 1>(4);
+    run_microgemm< 256, 1>(8);
+    run_microgemm< 512, 1>(1);
+    run_microgemm< 512, 1>(2);
+    run_microgemm< 512, 1>(4);
+    run_microgemm< 512, 1>(8);
+    run_microgemm<1024, 1>(1);
+    run_microgemm<1024, 1>(2);
+    run_microgemm<1024, 1>(4);
+    run_microgemm<1024, 1>(8);
 
     return 0;
 }
