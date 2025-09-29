@@ -20,6 +20,8 @@ class RV_t
 	virtual void vse64(u32 vs, double *A) = 0;
 	virtual u32& SEW() = 0;
 	virtual u32& LMUL() = 0;
+	virtual u32& RMUL() = 0;
+	virtual u32& CMUL() = 0;
 	virtual s64& X(u32 rs) = 0;
 	virtual u32 VLEN() const = 0;
 	virtual u32 lambda() const = 0;
@@ -34,6 +36,8 @@ class RVIME_t : public RV_t
     private:
 	u32	SEW_;
 	u32     LMUL_;
+	u32	RMUL_;
+	u32	CMUL_;
 	bool	altfmt_;
 	union
 	{
@@ -81,6 +85,16 @@ class RVIME_t : public RV_t
 	    return LMUL_;
 	}
 
+	u32& RMUL()
+	{
+	    return RMUL_;
+	}
+
+	u32& CMUL()
+	{
+	    return CMUL_;
+	}
+
 	u32 VLEN() const
 	{
 	    return VLEN_;
@@ -111,10 +125,13 @@ class RVIME_t : public RV_t
 
 	void vfmmacc(u32 vd, u32 vs1, u32 vs2)
 	{
+	    u32 B = VLENE()/(lambda() * lambda());
 	    switch(SEW_)
 	    {
 		case 64:
-		    vfmmacc_fp64(vd, vs1, vs2);
+		    std::cout << "Each basic vfmmacc produces " << B << " vector registers of output" << std::endl;
+		    for (u32 i=0; i<RMUL(); i++) for (u32 j=0; j<CMUL(); j++)
+			vfmmacc_fp64(vd + B*i + B*j*RMUL(), vs1 + i, vs2 + j);
 		    break;
 		default:
 		    assert(false);
@@ -165,6 +182,16 @@ class vsetvli_t
 	}
 };
 
+class vsetmul_t
+{
+    public:
+	void operator()(u32 rmul, u32 cmul)
+	{
+	    RV->CMUL() = cmul;
+	    RV->RMUL() = rmul;
+	}
+};
+
 class vfmmacc_t
 {
     public:
@@ -205,6 +232,7 @@ class vse64_t
 
 vfmmacc_t vfmmacc;
 vsetvli_t vsetvli;
+vsetmul_t vsetmul;
 vxor_t    vxor;
 vle64_t	  vle64;
 vse64_t   vse64;
@@ -215,22 +243,36 @@ void microgemm
     double *A,
     double *B,
     double *C,
-    u32     N
+    u32     M,
+    u32     N,
+    u32     rmul,
+    u32     cmul
 )
 {
     assert(0 == K % RV->lambda());
 
     vsetvli(5, 0, 64, 1, true, true);
+    vsetmul(rmul,cmul);
     for (u32 r=16; r<32; r++) vxor.vv(r, r, r);
-    for (u32 k=0; k<K; k++)
+    for (u32 k=0; k<K; k=k+RV->lambda())
     {
+	RV->LMUL() = rmul;
 	vle64.v(0, A);
+	RV->LMUL() = cmul;
 	vle64.v(8, B);
 	vfmmacc.vv(16, 0, 8);
-	A += RV->X(5);
-	B += RV->X(5);
+	A += M * RV->lambda();
+	B += N * RV->lambda();
     }
-    for (u32 i=0; i<N; i++) vse64.v(16 + i, C + i*RV->VLENE());
+    RV->LMUL() = 1;
+    u32 D = RV->VLENE()/(RV->lambda() * RV->lambda());
+    for (u32 j=0; j<cmul; j++)
+	for (u32 k=0; k<D; k++)
+	    for (u32 i=0; i<rmul; i++)
+	    {
+		vse64.v(16 + D*i + D*j*rmul + k, C);
+		C += RV->VLENE();
+	    }
 }
 
 double now()
@@ -251,8 +293,22 @@ bool run_microgemm
 
     // Find the geometry of the microgemm
     vsetvli(5, 0, 64, 1, true, true);
-    u32 M = RV->mu();
-    u32 N = RV->nu();
+    u32 L = RV->VLENE();
+    assert(L >= lambda);
+    assert(L/(lambda*lambda) >=  1);
+    assert(L/(lambda*lambda) <= 16);
+
+    u32 rmul = 1;
+    u32 cmul = 1;
+    while (rmul * cmul * L/(lambda*lambda) < 16)
+    {
+	if (cmul > rmul) rmul = rmul*2;
+	else cmul = cmul * 2;
+    }
+    std::cout << "RMUL = " << rmul << ", CMUL = " << cmul << std::endl;
+
+    u32 M = rmul*RV->mu();
+    u32 N = cmul*RV->nu();
 
     std::cout << "Microgemm geometry : " << M << " x " << N << std::endl;
 
@@ -262,7 +318,7 @@ bool run_microgemm
     double *C = new double[M*N]; for (u32 i=0; i<M*N; i++) C[i] = drand48() - 0.5;
 
     // Invoke the microgemm kernel
-    microgemm(K, A, B, C, N);
+    microgemm(K, A, B, C, M, N, rmul, cmul);
 
     // Check the result
     for (u32 j=0; j<N; j++)
@@ -270,10 +326,14 @@ bool run_microgemm
 	{
 	    double S = 0;
 	    for (u32 k=0; k<K; k++)
+	    {
+		if ((2 == i) && (0 == j))
+		    std::cout << "A[" << i << ", " << k << "] = " << A[i+k*M] << std::endl;
 		S += A[i+k*M]*B[j+k*N];
+	    }
 	    if (S != C[i+j*M])
 	    {
-		std::cerr << "Error for C[" << i << "," << j << "] = " << S << std::endl;
+		std::cout << "Error for C[" << i << "," << j << "] = " << C[i+j*M] << " != " << S << std::endl;
 		exit(-1);
 	    }
 	}
