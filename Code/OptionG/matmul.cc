@@ -16,180 +16,180 @@ const u32 debug = 0;
 class RV_t
 {
     public:
-	virtual void vfmmacc(u32 vd, u32 vs1, u32 vs2) = 0;
-	virtual void vfmacc(u32 vl, u32 vd, double alpha, u32 vs2) = 0;
-	virtual void vxor(u32 vd, u32 vs1, u32 vs2) = 0;
-	virtual void vle64(u32 vl, u32 vd, double *A) = 0;
-	virtual void vse64(u32 vl, u32 vs, double *A) = 0;
-	virtual u32& SEW() = 0;
-	virtual u32& LMUL() = 0;
-	virtual u32& RMUL() = 0;
-	virtual u32& CMUL() = 0;
-	virtual s64& X(u32 rs) = 0;
-	virtual u32  VLEN() const = 0;
-	virtual u32& VL() = 0;
-	virtual u32  lambda() const = 0;
-	virtual u32  VLENE() const = 0;
-	virtual u32  sigma() const = 0;
+        virtual void vfmmacc(u32 vd, u32 vs1, u32 vs2) = 0;
+        virtual void vfmacc(u32 vl, u32 vd, double alpha, u32 vs2) = 0;
+        virtual void vxor(u32 vd, u32 vs1, u32 vs2) = 0;
+        virtual void vle64(u32 vl, u32 vd, double *A) = 0;
+        virtual void vse64(u32 vl, u32 vs, double *A) = 0;
+        virtual u32& SEW() = 0;
+        virtual u32& LMUL() = 0;
+        virtual u32& RMUL() = 0;
+        virtual u32& CMUL() = 0;
+        virtual s64& X(u32 rs) = 0;
+        virtual u32  VLEN() const = 0;
+        virtual u32& VL() = 0;
+        virtual u32  lambda() const = 0;
+        virtual u32  VLENE() const = 0;
+        virtual u32  sigma() const = 0;
 };
 
 template<u32 VLEN_, u32 lambda_>
 class RVIME_t : public RV_t
 {
     private:
-	u32	SEW_;
-	u32     LMUL_;
-	u32	RMUL_;
-	u32	CMUL_;
-	u32	VL_;
-	bool	altfmt_;
-	union
-	{
-	    double f64[VLEN_/64];
-	    float  f32[VLEN_/32];
-	    u64    i64[VLEN_/64];
-	} VR[32];
-	s64 X_[32];
+        u32     SEW_;
+        u32     LMUL_;
+        u32     RMUL_;
+        u32     CMUL_;
+        u32     VL_;
+        bool    altfmt_;
+        union
+        {
+            double f64[VLEN_/64];
+            float  f32[VLEN_/32];
+            u64    i64[VLEN_/64];
+        } VR[32];
+        s64 X_[32];
 
-	void vfmmacc_fp64(u32 vd, u32 vs1, u32 vs2)
-	{
-	    u32 L = VLEN_/SEW_;
-	    u32 m = L/lambda_;
-	    u32 n = m/lambda_;
-	    if (debug > 0)
-	    {
-		std::cout << "Executing double-precision vfmmacc : " << "vd = " << vd << ", vs1 = " << vs1 << ", vs2 = " << vs2 << ", L = " << L << ", m = " << m << ", n = " << n << std::endl;
-	    }
+        void vfmmacc_fp64(u32 vd, u32 vs1, u32 vs2)
+        {
+            u32 L = VLEN_/SEW_;
+            u32 m = L/lambda_;
+            u32 n = m/lambda_;
+            if (debug > 0)
+            {
+                std::cout << "Executing double-precision vfmmacc : " << "vd = " << vd << ", vs1 = " << vs1 << ", vs2 = " << vs2 << ", L = " << L << ", m = " << m << ", n = " << n << std::endl;
+            }
 
-	    for (u32 k=0; k<lambda_; k++)
-	    {
-		for (u32 i=0; i<m; i++)
-		    for (u32 j=0; j<m; j++)
-		    {
-			if (debug > 0)
-			{
-			    std::cout << "Computing VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] += VR[" << vs1 << "].f64[" << i + m*k << "] * VR[" << vs2 << "].f64[" << j + m*k << "]" << std::endl;
-			}
-			VR[vd + j/lambda_].f64[i + m*(j%lambda_)] += VR[vs1].f64[i + m*k] * VR[vs2].f64[j + m*k]; 
-			if (debug > 0)
-			{
-			    std::cout << "VR[" << vs1 << "].f64[" << i + m*k << "] = " << VR[vs1].f64[i + m*k] << std::endl;
-			    std::cout << "VR[" << vs2 << "].f64[" << j + m*k << "] = " << VR[vs2].f64[j + m*k] << std::endl;
-			    std::cout << "VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] = " << VR[vd + j/lambda_].f64[i + m*(j%lambda_)] << std::endl;
-			}
-		    }
-	    }
-	}
+            for (u32 k=0; k<lambda_; k++)
+            {
+                for (u32 i=0; i<m; i++)
+                    for (u32 j=0; j<m; j++)
+                    {
+                        if (debug > 0)
+                        {
+                            std::cout << "Computing VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] += VR[" << vs1 << "].f64[" << i + m*k << "] * VR[" << vs2 << "].f64[" << j + m*k << "]" << std::endl;
+                        }
+                        VR[vd + j/lambda_].f64[i + m*(j%lambda_)] += VR[vs1].f64[i + m*k] * VR[vs2].f64[j + m*k]; 
+                        if (debug > 0)
+                        {
+                            std::cout << "VR[" << vs1 << "].f64[" << i + m*k << "] = " << VR[vs1].f64[i + m*k] << std::endl;
+                            std::cout << "VR[" << vs2 << "].f64[" << j + m*k << "] = " << VR[vs2].f64[j + m*k] << std::endl;
+                            std::cout << "VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] = " << VR[vd + j/lambda_].f64[i + m*(j%lambda_)] << std::endl;
+                        }
+                    }
+            }
+        }
 
-	void vxor_i64(u32 vd, u32 vs1, u32 vs2)
-	{
-	    u32 L = VLEN_/SEW_;
-	    for (u32 i=0; i<L; i++) VR[vd].i64[i] = VR[vs1].i64[i] ^ VR[vs2].i64[i];
-	}
+        void vxor_i64(u32 vd, u32 vs1, u32 vs2)
+        {
+            u32 L = VLEN_/SEW_;
+            for (u32 i=0; i<L; i++) VR[vd].i64[i] = VR[vs1].i64[i] ^ VR[vs2].i64[i];
+        }
 
     public:
-	u32& SEW()
-	{
-	    return SEW_;
-	}
+        u32& SEW()
+        {
+            return SEW_;
+        }
 
-	u32& LMUL()
-	{
-	    return LMUL_;
-	}
+        u32& LMUL()
+        {
+            return LMUL_;
+        }
 
-	u32& RMUL()
-	{
-	    return RMUL_;
-	}
+        u32& RMUL()
+        {
+            return RMUL_;
+        }
 
-	u32& CMUL()
-	{
-	    return CMUL_;
-	}
+        u32& CMUL()
+        {
+            return CMUL_;
+        }
 
-	u32 VLEN() const
-	{
-	    return VLEN_;
-	}
+        u32 VLEN() const
+        {
+            return VLEN_;
+        }
 
-	u32& VL()
-	{
-	    return VL_;
-	}
+        u32& VL()
+        {
+            return VL_;
+        }
 
-	u32 lambda() const
-	{
-	    return lambda_;
-	}
+        u32 lambda() const
+        {
+            return lambda_;
+        }
 
-	u32 sigma() const
-	{
-	    u32 L = VLEN_/SEW_;
-	    return L/lambda_;
-	}
+        u32 sigma() const
+        {
+            u32 L = VLEN_/SEW_;
+            return L/lambda_;
+        }
 
-	s64& X(u32 rs)
-	{
-	    assert(rs < 32);
-	    return X_[rs];
-	}
+        s64& X(u32 rs)
+        {
+            assert(rs < 32);
+            return X_[rs];
+        }
 
-	void vfmmacc(u32 vd, u32 vs1, u32 vs2)
-	{
-	    u32 B = VLENE()/(lambda() * lambda());
-	    switch(SEW_)
-	    {
-		case 64:
-		    if (debug > 0)
-		    {
-			std::cout << "Each basic vfmmacc produces " << B << " vector registers of output" << std::endl;
-		    }
-		    for (u32 i=0; i<RMUL(); i++) for (u32 j=0; j<CMUL(); j++)
-			vfmmacc_fp64(vd + B*i + B*j*RMUL(), vs1 + i, vs2 + j);
-		    break;
-		default:
-		    assert(false);
-	    }
-	}
+        void vfmmacc(u32 vd, u32 vs1, u32 vs2)
+        {
+            u32 B = VLENE()/(lambda() * lambda());
+            switch(SEW_)
+            {
+                case 64:
+                    if (debug > 0)
+                    {
+                        std::cout << "Each basic vfmmacc produces " << B << " vector registers of output" << std::endl;
+                    }
+                    for (u32 i=0; i<RMUL(); i++) for (u32 j=0; j<CMUL(); j++)
+                        vfmmacc_fp64(vd + B*i + B*j*RMUL(), vs1 + i, vs2 + j);
+                    break;
+                default:
+                    assert(false);
+            }
+        }
 
-	void vxor(u32 vd, u32 vs1, u32 vs2)
-	{
-	    switch(SEW_)
-	    {
-		case 64:
-		    vxor_i64(vd, vs1, vs2);
-		    break;
-		default:
-		    assert(false);
-	    }
-	}
+        void vxor(u32 vd, u32 vs1, u32 vs2)
+        {
+            switch(SEW_)
+            {
+                case 64:
+                    vxor_i64(vd, vs1, vs2);
+                    break;
+                default:
+                    assert(false);
+            }
+        }
 
-	void vfmacc(u32 vl, u32 vd, double alpha, u32 vs2)
-	{
-	    assert(vl <= VLENE());
-	    if (debug > 1) { std::cout << "Computing VR[" << vd << "] += " << alpha << " * VR[" << vs2 << "]" << std::endl; }
-	    for (u32 i=0; i<vl; i++) VR[vd].f64[i] += alpha * VR[vs2].f64[i];
-	}
+        void vfmacc(u32 vl, u32 vd, double alpha, u32 vs2)
+        {
+            assert(vl <= VLENE());
+            if (debug > 1) { std::cout << "Computing VR[" << vd << "] += " << alpha << " * VR[" << vs2 << "]" << std::endl; }
+            for (u32 i=0; i<vl; i++) VR[vd].f64[i] += alpha * VR[vs2].f64[i];
+        }
 
-	void vle64(u32 vl, u32 vd, double *A)
-	{
-	    assert(vl <= VLENE());
-	    if (debug > 2) { std::cout << "Loading VR[" << vd << "], vl = " << vl << std::endl; }
-	    for (u32 i=0; i<vl; i++) VR[vd].f64[i] = A[i];
-	}
+        void vle64(u32 vl, u32 vd, double *A)
+        {
+            assert(vl <= VLENE());
+            if (debug > 2) { std::cout << "Loading VR[" << vd << "], vl = " << vl << std::endl; }
+            for (u32 i=0; i<vl; i++) VR[vd].f64[i] = A[i];
+        }
 
-	void vse64(u32 vl, u32 vs, double *A)
-	{
-	    assert(vl <= VLENE());
-	    if (debug > 2) { std::cout << "Storing VR[" << vs << "], vl = " << vl << std::endl; }
-	    for (u32 i=0; i<vl; i++) A[i] = VR[vs].f64[i];
-	}
+        void vse64(u32 vl, u32 vs, double *A)
+        {
+            assert(vl <= VLENE());
+            if (debug > 2) { std::cout << "Storing VR[" << vs << "], vl = " << vl << std::endl; }
+            for (u32 i=0; i<vl; i++) A[i] = VR[vs].f64[i];
+        }
 
-	u32 VLENE() const
-	{
-	    return VLEN_/SEW_;
-	}
+        u32 VLENE() const
+        {
+            return VLEN_/SEW_;
+        }
 };
 
 RV_t *RV = nullptr;
@@ -197,66 +197,66 @@ RV_t *RV = nullptr;
 class vsetvli_t
 {
     public:
-	void operator()(u32 rd, u32 rs1, u32 sew, u32 lmul, u32 ta, u32 ma)
-	{
-	    if (0 == rs1)
-	    {
-		assert(0 == rs1);
-		RV->SEW() = sew;
-		RV->LMUL() = lmul;
-		RV->VL() = lmul*RV->VLENE();
-		RV->X(rd) = RV->VL();
-	    }
-	    else
-	    {
-		assert(rs1 <= lmul*RV->VLENE());
-		RV->SEW() = sew;
-		RV->LMUL() = lmul;
-		RV->VL() = rs1;
-		RV->X(rd) = RV->VL();
-	    }
-	}
+        void operator()(u32 rd, u32 rs1, u32 sew, u32 lmul, u32 ta, u32 ma)
+        {
+            if (0 == rs1)
+            {
+                assert(0 == rs1);
+                RV->SEW() = sew;
+                RV->LMUL() = lmul;
+                RV->VL() = lmul*RV->VLENE();
+                RV->X(rd) = RV->VL();
+            }
+            else
+            {
+                assert(rs1 <= lmul*RV->VLENE());
+                RV->SEW() = sew;
+                RV->LMUL() = lmul;
+                RV->VL() = rs1;
+                RV->X(rd) = RV->VL();
+            }
+        }
 };
 
 class vsetvl_t
 {
     public:
-	void operator()(u32 rd, u32 rs1, u32 sew, u32 lmul, u32 ta, u32 ma)
-	{
-	    assert(0 == rs1);
-	    RV->SEW() = sew;
-	    RV->LMUL() = lmul;
-	    RV->VL() = lmul*RV->VLENE();
-	    RV->X(rd) = RV->VL();
-	}
+        void operator()(u32 rd, u32 rs1, u32 sew, u32 lmul, u32 ta, u32 ma)
+        {
+            assert(0 == rs1);
+            RV->SEW() = sew;
+            RV->LMUL() = lmul;
+            RV->VL() = lmul*RV->VLENE();
+            RV->X(rd) = RV->VL();
+        }
 };
 
 class vsetmul_t
 {
     public:
-	void operator()(u32 rmul, u32 cmul)
-	{
-	    RV->CMUL() = cmul;
-	    RV->RMUL() = rmul;
-	}
+        void operator()(u32 rmul, u32 cmul)
+        {
+            RV->CMUL() = cmul;
+            RV->RMUL() = rmul;
+        }
 };
 
 class vfmmacc_t
 {
     public:
-	void vv(u32 vd, u32 vs1, u32 vs2)
-	{
-	    return RV->vfmmacc(vd, vs1, vs2);
-	}
+        void vv(u32 vd, u32 vs1, u32 vs2)
+        {
+            return RV->vfmmacc(vd, vs1, vs2);
+        }
 };
 
 class vxor_t
 {
     public:
-	void vv(u32 vd, u32 vs1, u32 vs2)
-	{
-	    return RV->vxor(vd, vs1, vs2);
-	}
+        void vv(u32 vd, u32 vs1, u32 vs2)
+        {
+            return RV->vxor(vd, vs1, vs2);
+        }
 };
 
 u32 min(u32 a, u32 b)
@@ -267,51 +267,51 @@ u32 min(u32 a, u32 b)
 class vfmacc_t
 {
     public:
-	void vf(u32 vd, double alpha, u32 vs2)
-	{
-	    assert(64 == RV->SEW());
-	    assert(RV->VL() <= RV->VLENE() * RV->LMUL());
-	    u32 vl = RV->VL();
-	    for (u32 i=0; i<RV->LMUL(); i++)
-	    {
-		RV->vfmacc(min(vl, RV->VLENE()), vd + i, alpha, vs2 + i);
-		vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
-	    }
-	}
+        void vf(u32 vd, double alpha, u32 vs2)
+        {
+            assert(64 == RV->SEW());
+            assert(RV->VL() <= RV->VLENE() * RV->LMUL());
+            u32 vl = RV->VL();
+            for (u32 i=0; i<RV->LMUL(); i++)
+            {
+                RV->vfmacc(min(vl, RV->VLENE()), vd + i, alpha, vs2 + i);
+                vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
+            }
+        }
 };
 
 class vle64_t
 {
     public:
-	void v(u32 vd, double *A)
-	{
-	    assert(64 == RV->SEW());
-	    assert(RV->VL() <= RV->VLENE() * RV->LMUL());
-	    u32 vl = RV->VL();
-	    for (u32 i=0; i<RV->LMUL(); i++)
-	    {
-		RV->vle64(min(vl, RV->VLENE()), vd + i, A + i*RV->VLENE());
-		vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
-	    }
-	    return;
-	}
+        void v(u32 vd, double *A)
+        {
+            assert(64 == RV->SEW());
+            assert(RV->VL() <= RV->VLENE() * RV->LMUL());
+            u32 vl = RV->VL();
+            for (u32 i=0; i<RV->LMUL(); i++)
+            {
+                RV->vle64(min(vl, RV->VLENE()), vd + i, A + i*RV->VLENE());
+                vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
+            }
+            return;
+        }
 };
 
 class vse64_t
 {
     public:
-	void v(u32 vs, double *A)
-	{
-	    assert(64 == RV->SEW());
-	    assert(RV->VL() <= RV->VLENE() * RV->LMUL());
-	    u32 vl = RV->VL();
-	    for (u32 i=0; i<RV->LMUL(); i++)
-	    {
-		RV->vse64(min(vl, RV->VLENE()), vs + i, A + i*RV->VLENE());
-		vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
-	    }
-	    return;
-	}
+        void v(u32 vs, double *A)
+        {
+            assert(64 == RV->SEW());
+            assert(RV->VL() <= RV->VLENE() * RV->LMUL());
+            u32 vl = RV->VL();
+            for (u32 i=0; i<RV->LMUL(); i++)
+            {
+                RV->vse64(min(vl, RV->VLENE()), vs + i, A + i*RV->VLENE());
+                vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
+            }
+            return;
+        }
 };
 
 vfmmacc_t vfmmacc;
@@ -320,7 +320,7 @@ vsetvli_t vsetvli;
 vsetvl_t  vsetvl;
 vsetmul_t vsetmul;
 vxor_t    vxor;
-vle64_t	  vle64;
+vle64_t   vle64;
 vse64_t   vse64;
 
 void microgemm
@@ -336,35 +336,35 @@ void microgemm
     u32     cmul
 )
 {
-    assert(0 == K % RV->lambda());			// For simplicty, K must be a multiple of lambda
+    assert(0 == K % RV->lambda());                      // For simplicty, K must be a multiple of lambda
 
-    vsetvli(5, 0, 64, 1, true, true);			// Initialize the vtype register
-    vsetmul(rmul,cmul);					// Initialize the RMUL/CMUL registers
-    for (u32 r=16; r<32; r++) vxor.vv(r, r, r);		// T = 0
-    for (u32 k=0; k<K; k=k+RV->lambda())		// Loop over the inner-dimension (K) in steps of lambda
+    vsetvli(5, 0, 64, 1, true, true);                   // Initialize the vtype register
+    vsetmul(rmul,cmul);                                 // Initialize the RMUL/CMUL registers
+    for (u32 r=16; r<32; r++) vxor.vv(r, r, r);         // T = 0
+    for (u32 k=0; k<K; k=k+RV->lambda())                // Loop over the inner-dimension (K) in steps of lambda
     {
-	vsetvli(5, 0, 64, RV->RMUL(), true, true);	// An immediate form of vsetvl where LMUL = RMUL
-	vle64.v(0, A);					// To be fused with the previous instruction for performance
-	vsetvli(5, 0, 64, RV->CMUL(), true, true);	// An immediate form of vservl where LMUL = CMUL
-	vle64.v(8, B);					// To be fused with the previous instruction for performance
-	vfmmacc.vv(16, 0, 8);				// Perform RMUL*CMUL basic operations
-	A += M * RV->lambda();				// Advance the A panel pointer
-	B += N * RV->lambda();				// Advance the B panel pointer
+        vsetvli(5, 0, 64, RV->RMUL(), true, true);      // An immediate form of vsetvl where LMUL = RMUL
+        vle64.v(0, A);                                  // To be fused with the previous instruction for performance
+        vsetvli(5, 0, 64, RV->CMUL(), true, true);      // An immediate form of vservl where LMUL = CMUL
+        vle64.v(8, B);                                  // To be fused with the previous instruction for performance
+        vfmmacc.vv(16, 0, 8);                           // Perform RMUL*CMUL basic operations
+        A += M * RV->lambda();                          // Advance the A panel pointer
+        B += N * RV->lambda();                          // Advance the B panel pointer
     }
     vsetvli(5, 0, 64, 1, true, true);
     u32 D = RV->VLENE()/(RV->lambda() * RV->lambda());  // D = # of output registers in a basic vfmmacc instruction
 
     for (u32 r=0; r<16; r++)
     {
-	u32 block = r/D;
-	u32 col = block/rmul;
-	u32 row = block%rmul;
-	u32 displ = (col*rmul*D + row + (r%D)*rmul)*RV->VL();
-	if (debug > 1) std::cout << "Reading VR[" << r << "] from C[" << displ << "]" << std::endl;
-	vle64.v(r, C + displ);
-	vfmacc.vf(r, alpha, r+16);
-	if (debug > 1) std::cout << "Writing VR[" << r << "]  to  C[" << displ << "]" << std::endl;
-	vse64.v(r, C + displ);
+        u32 block = r/D;
+        u32 col = block/rmul;
+        u32 row = block%rmul;
+        u32 displ = (col*rmul*D + row + (r%D)*rmul)*RV->VL();
+        if (debug > 1) std::cout << "Reading VR[" << r << "] from C[" << displ << "]" << std::endl;
+        vle64.v(r, C + displ);
+        vfmacc.vf(r, alpha, r+16);
+        if (debug > 1) std::cout << "Writing VR[" << r << "]  to  C[" << displ << "]" << std::endl;
+        vse64.v(r, C + displ);
     }
 }
 
@@ -385,20 +385,20 @@ void packfp64
     u32    mul
 )
 {
-    assert(0 == K % lambda);				// For simplicity, K must be a multiple of lambda
+    assert(0 == K % lambda);                            // For simplicity, K must be a multiple of lambda
 
     u32 mu = sigma*mul;
     vsetvli(5, sigma, 64, 1, true, true);
     for (u32 k=0; k<K; k+=lambda)
     {
-	for (u32 i=0; i<mul; i++)
-	    for (u32 j=0; j<lambda; j++)
-	    {
-		vle64.v(0, A + i*sigma + j*mu);
-		vse64.v(0, P + i*sigma*lambda + j*sigma); 
-	    }
-	A = A + mu*lambda;
-	P = P + mu*lambda;
+        for (u32 i=0; i<mul; i++)
+            for (u32 j=0; j<lambda; j++)
+            {
+                vle64.v(0, A + i*sigma + j*mu);
+                vse64.v(0, P + i*sigma*lambda + j*sigma); 
+            }
+        A = A + mu*lambda;
+        P = P + mu*lambda;
     }
 }
 
@@ -412,20 +412,20 @@ void unpackfp64
      u32    mul
 )
 {
-    assert(0 == K % lambda);				// For simplicity, K must be a multiple of lambda
+    assert(0 == K % lambda);                            // For simplicity, K must be a multiple of lambda
 
     u32 mu = sigma*mul;
     vsetvli(5, sigma, 64, 1, true, true);
     for (u32 k=0; k<K; k+=lambda)
     {
-	for (u32 i=0; i<mul; i++)
-	    for (u32 j=0; j<lambda; j++)
-	    {
-		vle64.v(0, P + i*sigma*lambda + j*sigma); 
-		vse64.v(0, A + i*sigma + j*mu);
-	    }
-	P = P + mu*lambda;
-	A = A + mu*lambda;
+        for (u32 i=0; i<mul; i++)
+            for (u32 j=0; j<lambda; j++)
+            {
+                vle64.v(0, P + i*sigma*lambda + j*sigma); 
+                vse64.v(0, A + i*sigma + j*mu);
+            }
+        P = P + mu*lambda;
+        A = A + mu*lambda;
     }
 }
 
@@ -448,8 +448,8 @@ bool run_microgemm
     u32 cmul = 1;
     while (rmul * cmul * L/(lambda*lambda) < 16)
     {
-	if (cmul > rmul) rmul = rmul*2;
-	else cmul = cmul * 2;
+        if (cmul > rmul) rmul = rmul*2;
+        else cmul = cmul * 2;
     }
     std::cout << "L = " << std::setw(2) << L << ", lambda = " << std::setw(2) << RV->lambda() << ", sigma = " << std::setw(2) << RV->sigma() << ", RMUL = " << rmul << ", CMUL = " << cmul;
 
@@ -490,24 +490,24 @@ bool run_microgemm
 
     // Check the result
     for (u32 j=0; j<N; j++)
-	for (u32 i=0; i<M; i++)
-	{
-	    double S = 0;
-	    for (u32 k=0; k<K; k++)
-	    {
-		if (debug > 1)
-		{
-		    if ((2 == i) && (0 == j))
-			std::cout << "A[" << i << ", " << k << "] = " << A[i+k*M] << ", B[" << k << ", " << j << "] = " << B[j+k*N] << std::endl;
-		}
-		S += A[i+k*M]*B[j+k*N];
-	    }
-	    if ((alpha*S + C[i+j*M]) != D[i+j*M])
-	    {
-		std::cout << "Error for D[" << i << "," << j << "] = " << D[i+j*M] << " != " << S << std::endl;
-		exit(-1);
-	    }
-	}
+        for (u32 i=0; i<M; i++)
+        {
+            double S = 0;
+            for (u32 k=0; k<K; k++)
+            {
+                if (debug > 1)
+                {
+                    if ((2 == i) && (0 == j))
+                        std::cout << "A[" << i << ", " << k << "] = " << A[i+k*M] << ", B[" << k << ", " << j << "] = " << B[j+k*N] << std::endl;
+                }
+                S += A[i+k*M]*B[j+k*N];
+            }
+            if ((alpha*S + C[i+j*M]) != D[i+j*M])
+            {
+                std::cout << "Error for D[" << i << "," << j << "] = " << D[i+j*M] << " != " << S << std::endl;
+                exit(-1);
+            }
+        }
 
     // Free the panels
     delete [] Cp;
@@ -524,7 +524,7 @@ bool run_microgemm
 
 int main
 (
-    int		argc,
+    int         argc,
     char      **argv
 )
 {
