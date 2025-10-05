@@ -17,6 +17,7 @@ class RV_t
 {
     public:
 	virtual void vfmmacc(u32 vd, u32 vs1, u32 vs2) = 0;
+	virtual void vfmacc(u32 vl, u32 vd, double alpha, u32 vs2) = 0;
 	virtual void vxor(u32 vd, u32 vs1, u32 vs2) = 0;
 	virtual void vle64(u32 vl, u32 vd, double *A) = 0;
 	virtual void vse64(u32 vl, u32 vs, double *A) = 0;
@@ -164,6 +165,13 @@ class RVIME_t : public RV_t
 	    }
 	}
 
+	void vfmacc(u32 vl, u32 vd, double alpha, u32 vs2)
+	{
+	    assert(vl <= VLENE());
+	    if (debug > 1) { std::cout << "Computing VR[" << vd << "] += " << alpha << " * VR[" << vs2 << "]" << std::endl; }
+	    for (u32 i=0; i<vl; i++) VR[vd].f64[i] += alpha * VR[vs2].f64[i];
+	}
+
 	void vle64(u32 vl, u32 vd, double *A)
 	{
 	    assert(vl <= VLENE());
@@ -256,6 +264,22 @@ u32 min(u32 a, u32 b)
     return (a < b) ? a : b;
 }
 
+class vfmacc_t
+{
+    public:
+	void vf(u32 vd, double alpha, u32 vs2)
+	{
+	    assert(64 == RV->SEW());
+	    assert(RV->VL() <= RV->VLENE() * RV->LMUL());
+	    u32 vl = RV->VL();
+	    for (u32 i=0; i<RV->LMUL(); i++)
+	    {
+		RV->vfmacc(min(vl, RV->VLENE()), vd + i, alpha, vs2 + i);
+		vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
+	    }
+	}
+};
+
 class vle64_t
 {
     public:
@@ -291,6 +315,7 @@ class vse64_t
 };
 
 vfmmacc_t vfmmacc;
+vfmacc_t  vfmacc;
 vsetvli_t vsetvli;
 vsetvl_t  vsetvl;
 vsetmul_t vsetmul;
@@ -335,8 +360,11 @@ void microgemm
 	u32 col = block/rmul;
 	u32 row = block%rmul;
 	u32 displ = (col*rmul*D + row + (r%D)*rmul)*RV->VL();
-	if (debug > 1) std::cout << "Writing VR[" << r+16 << "] to C[" << displ << "]" << std::endl;
-	vse64.v(r+16, C + displ);
+	if (debug > 1) std::cout << "Reading VR[" << r << "] from C[" << displ << "]" << std::endl;
+	vle64.v(r, C + displ);
+	vfmacc.vf(r, alpha, r+16);
+	if (debug > 1) std::cout << "Writing VR[" << r << "]  to  C[" << displ << "]" << std::endl;
+	vse64.v(r, C + displ);
     }
 }
 
@@ -433,6 +461,8 @@ bool run_microgemm
     u32 M = mu;
     u32 N = nu;
 
+    double alpha = 3.141592654;
+
     // Allocate A, B, and C panels
     double *A = new double[M*K]; for (u32 i=0; i<M*K; i++) A[i] = drand48() - 0.5;
     double *B = new double[K*N]; for (u32 i=0; i<K*N; i++) B[i] = drand48() - 0.5;
@@ -453,7 +483,7 @@ bool run_microgemm
     packfp64(Cp, C, RV->sigma(), RV->lambda(), N, RV->RMUL());
 
     // Invoke the microgemm kernel
-    microgemm(K, Ap, Bp, 1.0, Cp, M, N, rmul, cmul);
+    microgemm(K, Ap, Bp, alpha, Cp, M, N, rmul, cmul);
 
     // Unpack the results
     unpackfp64(D, Cp, RV->sigma(), RV->lambda(), N, RV->RMUL());
@@ -472,7 +502,7 @@ bool run_microgemm
 		}
 		S += A[i+k*M]*B[j+k*N];
 	    }
-	    if (S != D[i+j*M])
+	    if ((alpha*S + C[i+j*M]) != D[i+j*M])
 	    {
 		std::cout << "Error for D[" << i << "," << j << "] = " << D[i+j*M] << " != " << S << std::endl;
 		exit(-1);
