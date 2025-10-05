@@ -25,10 +25,11 @@ class RV_t
 	virtual u32& RMUL() = 0;
 	virtual u32& CMUL() = 0;
 	virtual s64& X(u32 rs) = 0;
-	virtual u32 VLEN() const = 0;
-	virtual u32 lambda() const = 0;
-	virtual u32 VLENE() const = 0;
-	virtual u32 sigma() const = 0;
+	virtual u32  VLEN() const = 0;
+	virtual u32& VL() = 0;
+	virtual u32  lambda() const = 0;
+	virtual u32  VLENE() const = 0;
+	virtual u32  sigma() const = 0;
 };
 
 template<u32 VLEN_, u32 lambda_>
@@ -39,6 +40,7 @@ class RVIME_t : public RV_t
 	u32     LMUL_;
 	u32	RMUL_;
 	u32	CMUL_;
+	u32	VL_;
 	bool	altfmt_;
 	union
 	{
@@ -110,6 +112,11 @@ class RVIME_t : public RV_t
 	    return VLEN_;
 	}
 
+	u32& VL()
+	{
+	    return VL_;
+	}
+
 	u32 lambda() const
 	{
 	    return lambda_;
@@ -178,14 +185,30 @@ class RVIME_t : public RV_t
 };
 
 RV_t *RV = nullptr;
+
 class vsetvli_t
 {
     public:
 	void operator()(u32 rd, u32 rs1, u32 sew, u32 lmul, u32 ta, u32 ma)
 	{
+	    assert(0 == rs1);
 	    RV->SEW() = sew;
 	    RV->LMUL() = lmul;
-	    RV->X(rd) = RV->VLENE();
+	    RV->VL() = lmul*RV->VLENE();
+	    RV->X(rd) = RV->VL();
+	}
+};
+
+class vsetvl_t
+{
+    public:
+	void operator()(u32 rd, u32 rs1, u32 sew, u32 lmul, u32 ta, u32 ma)
+	{
+	    assert(0 == rs1);
+	    RV->SEW() = sew;
+	    RV->LMUL() = lmul;
+	    RV->VL() = lmul*RV->VLENE();
+	    RV->X(rd) = RV->VL();
 	}
 };
 
@@ -222,6 +245,7 @@ class vle64_t
     public:
 	void v(u32 vd, double *A)
 	{
+	    assert(RV->VL() == RV->VLENE() * RV->LMUL());
 	    for (u32 i=0; i<RV->LMUL(); i++) RV->vle64(vd + i, A + i*RV->VLENE());
 	    return;
 	}
@@ -232,6 +256,7 @@ class vse64_t
     public:
 	void v(u32 vs, double *A)
 	{
+	    assert(RV->VL() == RV->VLENE() * RV->LMUL());
 	    for (u32 i=0; i<RV->LMUL(); i++) RV->vse64(vs + i, A + i*RV->VLENE());
 	    return;
 	}
@@ -239,6 +264,7 @@ class vse64_t
 
 vfmmacc_t vfmmacc;
 vsetvli_t vsetvli;
+vsetvl_t  vsetvl;
 vsetmul_t vsetmul;
 vxor_t    vxor;
 vle64_t	  vle64;
@@ -263,15 +289,15 @@ void microgemm
     for (u32 r=16; r<32; r++) vxor.vv(r, r, r);
     for (u32 k=0; k<K; k=k+RV->lambda())
     {
-	RV->LMUL() = rmul;
+	vsetvli(5, 0, 64, RV->RMUL(), true, true);
 	vle64.v(0, A);
-	RV->LMUL() = cmul;
+	vsetvli(5, 0, 64, RV->CMUL(), true, true);
 	vle64.v(8, B);
 	vfmmacc.vv(16, 0, 8);
 	A += M * RV->lambda();
 	B += N * RV->lambda();
     }
-    RV->LMUL() = 1;
+    vsetvli(5, 0, 64, 1, true, true);
     u32 D = RV->VLENE()/(RV->lambda() * RV->lambda());
     for (u32 j=0; j<cmul; j++)
 	for (u32 k=0; k<D; k++)
@@ -287,6 +313,14 @@ double now()
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     return (double)ts.tv_sec + (double)ts.tv_nsec * 1.0e-9;
+}
+
+void packfp64
+(
+    double *P,
+    double *A
+)
+{
 }
 
 template<u32 VLEN, u32 lambda>
@@ -327,6 +361,14 @@ bool run_microgemm
     double *B = new double[K*N]; for (u32 i=0; i<K*N; i++) B[i] = drand48() - 0.5;
     double *C = new double[M*N]; for (u32 i=0; i<M*N; i++) C[i] = drand48() - 0.5;
 
+    // Allocate the packed panels
+    double *Ap = new double[M*K];
+    double *Bp = new double[K*N];
+
+    // Pack the A and B panels
+    packfp64(Ap, A);
+    packfp64(Bp, B);
+
     // Invoke the microgemm kernel
     microgemm(K, A, B, C, M, N, rmul, cmul);
 
@@ -352,6 +394,8 @@ bool run_microgemm
 	}
 
     // Free the panels
+    delete [] Bp;
+    delete [] Ap;
     delete [] C;
     delete [] B;
     delete [] A;
