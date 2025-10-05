@@ -166,14 +166,14 @@ class RVIME_t : public RV_t
 
 	void vle64(u32 vd, double *A)
 	{
-	    if (debug > 0) { std::cout << "Loading VR[" << vd << "]" << std::endl; }
+	    if (debug > 2) { std::cout << "Loading VR[" << vd << "]" << std::endl; }
 	    u32 L = VLEN_/SEW_;
 	    for (u32 i=0; i<L; i++) VR[vd].f64[i] = A[i];
 	}
 
 	void vse64(u32 vs, double *A)
 	{
-	    if (debug > 0) { std::cout << "Storing VR[" << vs << "]" << std::endl; }
+	    if (debug > 2) { std::cout << "Storing VR[" << vs << "]" << std::endl; }
 	    u32 L = VLEN_/SEW_;
 	    for (u32 i=0; i<L; i++) A[i] = VR[vs].f64[i];
 	}
@@ -310,6 +310,18 @@ void microgemm
 	B += N * RV->lambda();				// Advance the B panel pointer
     }
     vsetvli(5, 0, 64, 1, true, true);
+    u32 D = RV->VLENE()/(RV->lambda() * RV->lambda());  // D = # of output registers in a basic vfmmacc instruction
+
+    for (u32 r=0; r<16; r++)
+    {
+	u32 block = r/D;
+	u32 col = block/rmul;
+	u32 row = block%rmul;
+	u32 displ = (col*rmul*D + row + (r%D)*rmul)*RV->VL();
+	if (debug > 1) std::cout << "Writing VR[" << r+16 << "] to C[" << displ << "]" << std::endl;
+	vse64.v(r+16, C + displ);
+    }
+    /*
     u32 D = RV->VLENE()/(RV->lambda() * RV->lambda());
     for (u32 j=0; j<cmul; j++)
 	for (u32 k=0; k<D; k++)
@@ -318,6 +330,7 @@ void microgemm
 		vse64.v(16 + D*i + D*j*rmul + k, C);
 		C += RV->VLENE();
 	    }
+    */
 }
 
 double now()
@@ -342,12 +355,43 @@ void packfp64
     u32 mu = sigma*mul;
     vsetvli(5, sigma, 64, 1, true, true);
     for (u32 k=0; k<K; k+=lambda)
+    {
 	for (u32 i=0; i<mul; i++)
 	    for (u32 j=0; j<lambda; j++)
 	    {
-		vle64.v(0, A + i*sigma + (j+k)*mu);
-		vse64.v(0, P + i*sigma*lambda + j*sigma + k*mu); 
+		vle64.v(0, A + i*sigma + j*mu);
+		vse64.v(0, P + i*sigma*lambda + j*sigma); 
 	    }
+	A = A + mu*lambda;
+	P = P + mu*lambda;
+    }
+}
+
+void unpackfp64
+(
+     double *A,
+     double *P,
+     u32    sigma,
+     u32    lambda,
+     u32    K,
+     u32    mul
+)
+{
+    assert(0 == K % lambda);				// For simplicity, K must be a multiple of lambda
+
+    u32 mu = sigma*mul;
+    vsetvli(5, sigma, 64, 1, true, true);
+    for (u32 k=0; k<K; k+=lambda)
+    {
+	for (u32 i=0; i<mul; i++)
+	    for (u32 j=0; j<lambda; j++)
+	    {
+		vle64.v(0, P + i*sigma*lambda + j*sigma); 
+		vse64.v(0, A + i*sigma + j*mu);
+	    }
+	P = P + mu*lambda;
+	A = A + mu*lambda;
+    }
 }
 
 template<u32 VLEN, u32 lambda>
@@ -403,7 +447,10 @@ bool run_microgemm
     packfp64(Cp, C, RV->sigma(), RV->lambda(), N, RV->RMUL());
 
     // Invoke the microgemm kernel
-    microgemm(K, Ap, Bp, 1.0, C, M, N, rmul, cmul);
+    microgemm(K, Ap, Bp, 1.0, Cp, M, N, rmul, cmul);
+
+    // Unpack the results
+    unpackfp64(D, Cp, RV->sigma(), RV->lambda(), N, RV->RMUL());
 
     // Check the result
     for (u32 j=0; j<N; j++)
@@ -415,13 +462,13 @@ bool run_microgemm
 		if (debug > 1)
 		{
 		    if ((2 == i) && (0 == j))
-			std::cout << "A[" << i << ", " << k << "] = " << A[i+k*M] << std::endl;
+			std::cout << "A[" << i << ", " << k << "] = " << A[i+k*M] << ", B[" << k << ", " << j << "] = " << B[j+k*N] << std::endl;
 		}
 		S += A[i+k*M]*B[j+k*N];
 	    }
-	    if (S != C[i+j*M])
+	    if (S != D[i+j*M])
 	    {
-		std::cout << "Error for C[" << i << "," << j << "] = " << C[i+j*M] << " != " << S << std::endl;
+		std::cout << "Error for D[" << i << "," << j << "] = " << D[i+j*M] << " != " << S << std::endl;
 		exit(-1);
 	    }
 	}
