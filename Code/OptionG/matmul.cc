@@ -11,6 +11,8 @@ typedef int64_t  s64;
 
 const u32 COUNT = 1;
 
+const u32 debug = 0;
+
 class RV_t
 {
     public:
@@ -26,8 +28,7 @@ class RV_t
 	virtual u32 VLEN() const = 0;
 	virtual u32 lambda() const = 0;
 	virtual u32 VLENE() const = 0;
-	virtual u32 mu() const = 0;
-	virtual u32 nu() const = 0;
+	virtual u32 sigma() const = 0;
 };
 
 template<u32 VLEN_, u32 lambda_>
@@ -52,18 +53,27 @@ class RVIME_t : public RV_t
 	    u32 L = VLEN_/SEW_;
 	    u32 m = L/lambda_;
 	    u32 n = m/lambda_;
-	    std::cout << "Executing double-precision vfmmacc : " << "vd = " << vd << ", vs1 = " << vs1 << ", vs2 = " << vs2 << ", L = " << L << ", m = " << m << ", n = " << n << std::endl;
+	    if (debug > 0)
+	    {
+		std::cout << "Executing double-precision vfmmacc : " << "vd = " << vd << ", vs1 = " << vs1 << ", vs2 = " << vs2 << ", L = " << L << ", m = " << m << ", n = " << n << std::endl;
+	    }
 
 	    for (u32 k=0; k<lambda_; k++)
 	    {
 		for (u32 i=0; i<m; i++)
 		    for (u32 j=0; j<m; j++)
 		    {
-			std::cout << "Computing VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] += VR[" << vs1 << "].f64[" << i + m*k << "] * VR[" << vs2 << "].f64[" << j + m*k << "]" << std::endl;
+			if (debug > 0)
+			{
+			    std::cout << "Computing VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] += VR[" << vs1 << "].f64[" << i + m*k << "] * VR[" << vs2 << "].f64[" << j + m*k << "]" << std::endl;
+			}
 			VR[vd + j/lambda_].f64[i + m*(j%lambda_)] += VR[vs1].f64[i + m*k] * VR[vs2].f64[j + m*k]; 
-			std::cout << "VR[" << vs1 << "].f64[" << i + m*k << "] = " << VR[vs1].f64[i + m*k] << std::endl;
-			std::cout << "VR[" << vs2 << "].f64[" << j + m*k << "] = " << VR[vs2].f64[j + m*k] << std::endl;
-			std::cout << "VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] = " << VR[vd + j/lambda_].f64[i + m*(j%lambda_)] << std::endl;
+			if (debug > 0)
+			{
+			    std::cout << "VR[" << vs1 << "].f64[" << i + m*k << "] = " << VR[vs1].f64[i + m*k] << std::endl;
+			    std::cout << "VR[" << vs2 << "].f64[" << j + m*k << "] = " << VR[vs2].f64[j + m*k] << std::endl;
+			    std::cout << "VR[" << vd + j/lambda_ << "].f64[" << i + m*(j%lambda_) << "] = " << VR[vd + j/lambda_].f64[i + m*(j%lambda_)] << std::endl;
+			}
 		    }
 	    }
 	}
@@ -105,13 +115,7 @@ class RVIME_t : public RV_t
 	    return lambda_;
 	}
 
-	u32 mu() const
-	{
-	    u32 L = VLEN_/SEW_;
-	    return L/lambda_;
-	}
-
-	u32 nu() const
+	u32 sigma() const
 	{
 	    u32 L = VLEN_/SEW_;
 	    return L/lambda_;
@@ -129,7 +133,10 @@ class RVIME_t : public RV_t
 	    switch(SEW_)
 	    {
 		case 64:
-		    std::cout << "Each basic vfmmacc produces " << B << " vector registers of output" << std::endl;
+		    if (debug > 0)
+		    {
+			std::cout << "Each basic vfmmacc produces " << B << " vector registers of output" << std::endl;
+		    }
 		    for (u32 i=0; i<RMUL(); i++) for (u32 j=0; j<CMUL(); j++)
 			vfmmacc_fp64(vd + B*i + B*j*RMUL(), vs1 + i, vs2 + j);
 		    break;
@@ -152,14 +159,14 @@ class RVIME_t : public RV_t
 
 	void vle64(u32 vd, double *A)
 	{
-	    std::cout << "Loading VR[" << vd << "]" << std::endl;
+	    if (debug > 0) { std::cout << "Loading VR[" << vd << "]" << std::endl; }
 	    u32 L = VLEN_/SEW_;
 	    for (u32 i=0; i<L; i++) VR[vd].f64[i] = A[i];
 	}
 
 	void vse64(u32 vs, double *A)
 	{
-	    std::cout << "Storing VR[" << vs << "]" << std::endl;
+	    if (debug > 0) { std::cout << "Storing VR[" << vs << "]" << std::endl; }
 	    u32 L = VLEN_/SEW_;
 	    for (u32 i=0; i<L; i++) A[i] = VR[vs].f64[i];
 	}
@@ -305,12 +312,15 @@ bool run_microgemm
 	if (cmul > rmul) rmul = rmul*2;
 	else cmul = cmul * 2;
     }
-    std::cout << "RMUL = " << rmul << ", CMUL = " << cmul << std::endl;
+    std::cout << "L = " << std::setw(2) << L << ", lambda = " << std::setw(2) << RV->lambda() << ", sigma = " << std::setw(2) << RV->sigma() << ", RMUL = " << rmul << ", CMUL = " << cmul;
 
-    u32 M = rmul*RV->mu();
-    u32 N = cmul*RV->nu();
+    u32 mu = rmul*RV->sigma();
+    u32 nu = cmul*RV->sigma();
 
-    std::cout << "Microgemm geometry : " << M << " x " << N << std::endl;
+    std::cout << ", microgemm geometry : " << std::setw(2) << mu << " x " << std::setw(2) << nu << std::endl;
+
+    u32 M = mu;
+    u32 N = nu;
 
     // Allocate A, B, and C panels
     double *A = new double[M*K]; for (u32 i=0; i<M*K; i++) A[i] = drand48() - 0.5;
@@ -327,8 +337,11 @@ bool run_microgemm
 	    double S = 0;
 	    for (u32 k=0; k<K; k++)
 	    {
-		if ((2 == i) && (0 == j))
-		    std::cout << "A[" << i << ", " << k << "] = " << A[i+k*M] << std::endl;
+		if (debug > 1)
+		{
+		    if ((2 == i) && (0 == j))
+			std::cout << "A[" << i << ", " << k << "] = " << A[i+k*M] << std::endl;
+		}
 		S += A[i+k*M]*B[j+k*N];
 	    }
 	    if (S != C[i+j*M])
@@ -346,54 +359,6 @@ bool run_microgemm
     // Successful execution
     return true;
 }
-
-double run_kernel
-(
-    void (kernel)(double*, double*, double*, double*),
-    uint32_t count
-)
-{
-    const uint32_t N = 1024*1024;
-    double *A = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) A[i] = drand48() - 0.5;
-    double *B = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) B[i] = drand48() - 0.5;
-    double *C = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) C[i] = drand48() - 0.5;
-    double *D = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) D[i] = drand48() - 0.5;
-
-    volatile double start, finish;
-
-    start = now();
-    for(; count; count -= COUNT)
-    {
-	kernel(A,B,C,D);
-    }
-    finish = now();
-
-    free(D);
-    free(C);
-    free(B);
-    free(A);
-
-    return (finish - start);
-}
-
-void run_kernel_and_report
-(
-    void (kernel)(double*, double*, double*, double*),
-    uint32_t count,
-    const char* name,
-    uint32_t M,
-    uint32_t N,
-    uint32_t K
-)
-{
-    volatile double elapsed;
-    volatile double flops = 2.0*count*M*N*K;
-    elapsed = run_kernel(kernel, count);
-    std::cout << std::setprecision(6);
-    std::cout << "Time to run " << std::setw(51) << name << " " << count << " times = " << std::setw(10) << std::fixed << elapsed << " seconds (" << std::setw(10) << std::scientific << flops/elapsed << " flops)" << std::endl;
-}
-
-#define RUN_KERNEL(kernel, count, M, N, K) run_kernel_and_report(kernel, count, #kernel, M, N, K)
 
 int main
 (
