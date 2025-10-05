@@ -337,15 +337,16 @@ void packfp64
     u32    mul
 )
 {
-    assert(0 == K % lambda);
+    assert(0 == K % lambda);				// For simplicity, K must be a multiple of lambda
+
     u32 mu = sigma*mul;
     vsetvli(5, sigma, 64, 1, true, true);
-    for (u32 i=0; i<mul; i++)
-	for (u32 j=0; j<K; j+=lambda)
-	    for (u32 k=0; k<lambda; k++)
+    for (u32 k=0; k<K; k+=lambda)
+	for (u32 i=0; i<mul; i++)
+	    for (u32 j=0; j<lambda; j++)
 	    {
-		vle64.v(0, A + i*sigma + (j+k)*sigma*mul);
-		vse64.v(0, P + i*sigma*lambda + k*sigma + j*sigma*mul); 
+		vle64.v(0, A + i*sigma + (j+k)*mu);
+		vse64.v(0, P + i*sigma*lambda + j*sigma + k*mu); 
 	    }
 }
 
