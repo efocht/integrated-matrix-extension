@@ -20,4 +20,4 @@ memory : memory.o
 	objdump -D $< > $@
 
 clean :
-	rm -rf matmul.out matmul.s matmul.o matmul
+	rm -rf matmul.out matmul.s matmul.o matmul.trace matmul
