@@ -191,11 +191,22 @@ class vsetvli_t
     public:
 	void operator()(u32 rd, u32 rs1, u32 sew, u32 lmul, u32 ta, u32 ma)
 	{
-	    assert(0 == rs1);
-	    RV->SEW() = sew;
-	    RV->LMUL() = lmul;
-	    RV->VL() = lmul*RV->VLENE();
-	    RV->X(rd) = RV->VL();
+	    if (0 == rs1)
+	    {
+		assert(0 == rs1);
+		RV->SEW() = sew;
+		RV->LMUL() = lmul;
+		RV->VL() = lmul*RV->VLENE();
+		RV->X(rd) = RV->VL();
+	    }
+	    else
+	    {
+		assert(rs1 <= lmul*RV->VLENE());
+		RV->SEW() = sew;
+		RV->LMUL() = lmul;
+		RV->VL() = rs1;
+		RV->X(rd) = RV->VL();
+	    }
 	}
 };
 
@@ -318,9 +329,22 @@ double now()
 void packfp64
 (
     double *P,
-    double *A
+    double *A,
+    u32    sigma,
+    u32    lambda,
+    u32    K,
+    u32    mul
 )
 {
+    assert(0 == K % lambda);
+    vsetvli(5, sigma, 64, 1, true, true);
+    for (u32 i=0; i<mul; i++)
+	for (u32 j=0; j<K; j+=lambda)
+	    for (u32 k=0; k<lambda; k++)
+	    {
+		vle64.v(0, A + i*sigma + (j+k)*sigma*mul);
+		vse64.v(0, P + i*sigma*lambda + k*sigma + j*sigma*mul); 
+	    }
 }
 
 template<u32 VLEN, u32 lambda>
@@ -366,11 +390,12 @@ bool run_microgemm
     double *Bp = new double[K*N];
 
     // Pack the A and B panels
-    packfp64(Ap, A);
-    packfp64(Bp, B);
+    vsetmul(rmul,cmul);
+    packfp64(Ap, A, RV->sigma(), RV->lambda(), K, RV->RMUL());
+    packfp64(Bp, B, RV->sigma(), RV->lambda(), K, RV->CMUL());
 
     // Invoke the microgemm kernel
-    microgemm(K, A, B, C, M, N, rmul, cmul);
+    microgemm(K, Ap, Bp, C, M, N, rmul, cmul);
 
     // Check the result
     for (u32 j=0; j<N; j++)
