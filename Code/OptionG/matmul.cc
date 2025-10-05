@@ -286,6 +286,7 @@ void microgemm
     u32     K,
     double *A,
     double *B,
+    double  alpha,
     double *C,
     u32     M,
     u32     N,
@@ -293,20 +294,20 @@ void microgemm
     u32     cmul
 )
 {
-    assert(0 == K % RV->lambda());
+    assert(0 == K % RV->lambda());			// For simplicty, K must be a multiple of lambda
 
-    vsetvli(5, 0, 64, 1, true, true);
-    vsetmul(rmul,cmul);
-    for (u32 r=16; r<32; r++) vxor.vv(r, r, r);
-    for (u32 k=0; k<K; k=k+RV->lambda())
+    vsetvli(5, 0, 64, 1, true, true);			// Initialize the vtype register
+    vsetmul(rmul,cmul);					// Initialize the RMUL/CMUL registers
+    for (u32 r=16; r<32; r++) vxor.vv(r, r, r);		// T = 0
+    for (u32 k=0; k<K; k=k+RV->lambda())		// Loop over the inner-dimension (K) in steps of lambda
     {
-	vsetvli(5, 0, 64, RV->RMUL(), true, true);
-	vle64.v(0, A);
-	vsetvli(5, 0, 64, RV->CMUL(), true, true);
-	vle64.v(8, B);
-	vfmmacc.vv(16, 0, 8);
-	A += M * RV->lambda();
-	B += N * RV->lambda();
+	vsetvli(5, 0, 64, RV->RMUL(), true, true);	// An immediate form of vsetvl where LMUL = RMUL
+	vle64.v(0, A);					// To be fused with the previous instruction for performance
+	vsetvli(5, 0, 64, RV->CMUL(), true, true);	// An immediate form of vservl where LMUL = CMUL
+	vle64.v(8, B);					// To be fused with the previous instruction for performance
+	vfmmacc.vv(16, 0, 8);				// Perform RMUL*CMUL basic operations
+	A += M * RV->lambda();				// Advance the A panel pointer
+	B += N * RV->lambda();				// Advance the B panel pointer
     }
     vsetvli(5, 0, 64, 1, true, true);
     u32 D = RV->VLENE()/(RV->lambda() * RV->lambda());
@@ -337,6 +338,7 @@ void packfp64
 )
 {
     assert(0 == K % lambda);
+    u32 mu = sigma*mul;
     vsetvli(5, sigma, 64, 1, true, true);
     for (u32 i=0; i<mul; i++)
 	for (u32 j=0; j<K; j+=lambda)
@@ -384,18 +386,23 @@ bool run_microgemm
     double *A = new double[M*K]; for (u32 i=0; i<M*K; i++) A[i] = drand48() - 0.5;
     double *B = new double[K*N]; for (u32 i=0; i<K*N; i++) B[i] = drand48() - 0.5;
     double *C = new double[M*N]; for (u32 i=0; i<M*N; i++) C[i] = drand48() - 0.5;
+    double *D = new double[M*N]; for (u32 i=0; i<M*N; i++) D[i] = 0.0;
 
     // Allocate the packed panels
     double *Ap = new double[M*K];
     double *Bp = new double[K*N];
+    double *Cp = new double[M*N];
 
     // Pack the A and B panels
     vsetmul(rmul,cmul);
     packfp64(Ap, A, RV->sigma(), RV->lambda(), K, RV->RMUL());
     packfp64(Bp, B, RV->sigma(), RV->lambda(), K, RV->CMUL());
 
+    // We also need to pack the C panel
+    packfp64(Cp, C, RV->sigma(), RV->lambda(), N, RV->RMUL());
+
     // Invoke the microgemm kernel
-    microgemm(K, Ap, Bp, C, M, N, rmul, cmul);
+    microgemm(K, Ap, Bp, 1.0, C, M, N, rmul, cmul);
 
     // Check the result
     for (u32 j=0; j<N; j++)
@@ -419,8 +426,10 @@ bool run_microgemm
 	}
 
     // Free the panels
+    delete [] Cp;
     delete [] Bp;
     delete [] Ap;
+    delete [] D;
     delete [] C;
     delete [] B;
     delete [] A;
