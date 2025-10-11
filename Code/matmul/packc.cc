@@ -4,6 +4,9 @@
 #include <iomanip>
 #include <assert.h>
 
+// debug flag
+const uint32_t debug = 0;
+
 // helper macros
 #define EXPAND(x)  _EXPAND(x)
 #define _EXPAND(x) #x
@@ -18,93 +21,100 @@
 #define xxmfacc(XT)			asm("xxmfacc " #XT)
 #define xvadddp(XT, XA, XB)		asm("xvadddp " #XT "," #XA "," #XB)
 #define addi(RT, RA, SI)		asm("addi " #RT "," #RA "," #SI)
+#define xxsetaccz(XT)			asm("xxsetaccz " #XT)
 
 // innermost loop count
 #define COUNT 1
 
-#define load_B_packed_4x8(D)   \
-    lxvp(32, 4,   0+D);        \
-    lxvp(34, 4,  32+D);        \
-    lxvp(36, 4,  64+D);        \
-    lxvp(38, 4,  96+D);        \
-    lxvp(40, 4, 128+D);        \
-    lxvp(42, 4, 160+D);        \
-    lxvp(44, 4, 192+D);        \
-    lxvp(46, 4, 224+D);
+#define load_B_packed_4x8(D)                \
+    lxvp(48, 4,   0+D); lxvp(50, 4,  32+D); \
+    lxvp(52, 4,  64+D); lxvp(54, 4,  96+D); \
+    lxvp(56, 4, 128+D); lxvp(58, 4, 160+D); \
+    lxvp(60, 4, 192+D); lxvp(62, 4, 224+D);
 
-#define load_A_packed_8x4(D)                    \
+#define load_A_packed_8x4(D)                \
     lxvp(32, 3,   0+D); lxvp(34, 3,  32+D); \
     lxvp(36, 3,  64+D); lxvp(38, 3,  96+D); \
     lxvp(40, 3, 128+D); lxvp(42, 3, 160+D); \
     lxvp(44, 3, 192+D); lxvp(46, 3, 224+D);
 
-#define rank_4_update_8x8_first() \
-    xvf64ger(0, 32, 48);          \
-    xvf64ger(1, 32, 49);          \
-    xvf64ger(2, 32, 50);          \
-    xvf64ger(3, 32, 51);          \
-    xvf64ger(4, 34, 48);          \
-    xvf64ger(5, 34, 49);          \
-    xvf64ger(6, 34, 50);          \
-    xvf64ger(7, 34, 51);          \
-    xvf64gerpp(0, 36, 52);        \
-    xvf64gerpp(1, 36, 53);        \
-    xvf64gerpp(2, 36, 54);        \
-    xvf64gerpp(3, 36, 55);        \
-    xvf64gerpp(4, 38, 52);        \
-    xvf64gerpp(5, 38, 53);        \
-    xvf64gerpp(6, 38, 54);        \
-    xvf64gerpp(7, 38, 55);        \
-    xvf64gerpp(0, 40, 56);        \
-    xvf64gerpp(1, 40, 57);        \
-    xvf64gerpp(2, 40, 58);        \
-    xvf64gerpp(3, 40, 59);        \
-    xvf64gerpp(4, 42, 56);        \
-    xvf64gerpp(5, 42, 57);        \
-    xvf64gerpp(6, 42, 58);        \
-    xvf64gerpp(7, 42, 59);        \
-    xvf64gerpp(0, 44, 60);        \
-    xvf64gerpp(1, 44, 61);        \
-    xvf64gerpp(2, 44, 62);        \
-    xvf64gerpp(3, 44, 63);        \
-    xvf64gerpp(4, 46, 60);        \
-    xvf64gerpp(5, 46, 61);        \
-    xvf64gerpp(6, 46, 62);        \
-    xvf64gerpp(7, 46, 63);    
+#define zero_8x8() \
+    xxsetaccz(0);  \
+    xxsetaccz(1);  \
+    xxsetaccz(2);  \
+    xxsetaccz(3);  \
+    xxsetaccz(4);  \
+    xxsetaccz(5);  \
+    xxsetaccz(6);  \
+    xxsetaccz(7);
 
-#define rank_4_update_8x8() \
-    xvf64gerpp(0, 32, 48); \
-    xvf64gerpp(1, 32, 49); \
-    xvf64gerpp(2, 32, 50); \
-    xvf64gerpp(3, 32, 51); \
-    xvf64gerpp(4, 34, 48); \
-    xvf64gerpp(5, 34, 49); \
-    xvf64gerpp(6, 34, 50); \
-    xvf64gerpp(7, 34, 51); \
-    xvf64gerpp(0, 36, 52); \
-    xvf64gerpp(1, 36, 53); \
-    xvf64gerpp(2, 36, 54); \
-    xvf64gerpp(3, 36, 55); \
-    xvf64gerpp(4, 38, 52); \
-    xvf64gerpp(5, 38, 53); \
-    xvf64gerpp(6, 38, 54); \
-    xvf64gerpp(7, 38, 55); \
-    xvf64gerpp(0, 40, 56); \
-    xvf64gerpp(1, 40, 57); \
-    xvf64gerpp(2, 40, 58); \
-    xvf64gerpp(3, 40, 59); \
-    xvf64gerpp(4, 42, 56); \
-    xvf64gerpp(5, 42, 57); \
-    xvf64gerpp(6, 42, 58); \
-    xvf64gerpp(7, 42, 59); \
-    xvf64gerpp(0, 44, 60); \
-    xvf64gerpp(1, 44, 61); \
-    xvf64gerpp(2, 44, 62); \
-    xvf64gerpp(3, 44, 63); \
-    xvf64gerpp(4, 46, 60); \
-    xvf64gerpp(5, 46, 61); \
-    xvf64gerpp(6, 46, 62); \
-    xvf64gerpp(7, 46, 63);
+#define rank_4_update_8x8_first() \
+    xvf64ger(0, 48, 33);          \
+    xvf64ger(1, 50, 33);          \
+    xvf64ger(2, 48, 32);          \
+    xvf64ger(3, 50, 32);          \
+    xvf64ger(4, 48, 35);          \
+    xvf64ger(5, 50, 35);          \
+    xvf64ger(6, 48, 34);          \
+    xvf64ger(7, 50, 34);          \
+    xvf64gerpp(0, 52, 37);        \
+    xvf64gerpp(1, 54, 37);        \
+    xvf64gerpp(2, 52, 36);        \
+    xvf64gerpp(3, 54, 36);        \
+    xvf64gerpp(4, 52, 39);        \
+    xvf64gerpp(5, 54, 39);        \
+    xvf64gerpp(6, 52, 38);        \
+    xvf64gerpp(7, 54, 38);        \
+    xvf64gerpp(0, 56, 41);        \
+    xvf64gerpp(1, 58, 41);        \
+    xvf64gerpp(2, 56, 40);        \
+    xvf64gerpp(3, 58, 40);        \
+    xvf64gerpp(4, 56, 43);        \
+    xvf64gerpp(5, 58, 43);        \
+    xvf64gerpp(6, 56, 42);        \
+    xvf64gerpp(7, 58, 42);        \
+    xvf64gerpp(0, 60, 45);        \
+    xvf64gerpp(1, 62, 45);        \
+    xvf64gerpp(2, 60, 44);        \
+    xvf64gerpp(3, 62, 44);        \
+    xvf64gerpp(4, 60, 47);        \
+    xvf64gerpp(5, 62, 47);        \
+    xvf64gerpp(6, 60, 46);        \
+    xvf64gerpp(7, 62, 46);    
+
+#define rank_4_update_8x8()       \
+    xvf64gerpp(0, 48, 33);        \
+    xvf64gerpp(1, 50, 33);        \
+    xvf64gerpp(2, 48, 32);        \
+    xvf64gerpp(3, 50, 32);        \
+    xvf64gerpp(4, 48, 35);        \
+    xvf64gerpp(5, 50, 35);        \
+    xvf64gerpp(6, 48, 34);        \
+    xvf64gerpp(7, 50, 34);        \
+    xvf64gerpp(0, 52, 37);        \
+    xvf64gerpp(1, 54, 37);        \
+    xvf64gerpp(2, 52, 36);        \
+    xvf64gerpp(3, 54, 36);        \
+    xvf64gerpp(4, 52, 39);        \
+    xvf64gerpp(5, 54, 39);        \
+    xvf64gerpp(6, 52, 38);        \
+    xvf64gerpp(7, 54, 38);        \
+    xvf64gerpp(0, 56, 41);        \
+    xvf64gerpp(1, 58, 41);        \
+    xvf64gerpp(2, 56, 40);        \
+    xvf64gerpp(3, 58, 40);        \
+    xvf64gerpp(4, 56, 43);        \
+    xvf64gerpp(5, 58, 43);        \
+    xvf64gerpp(6, 56, 42);        \
+    xvf64gerpp(7, 58, 42);        \
+    xvf64gerpp(0, 60, 45);        \
+    xvf64gerpp(1, 62, 45);        \
+    xvf64gerpp(2, 60, 44);        \
+    xvf64gerpp(3, 62, 44);        \
+    xvf64gerpp(4, 60, 47);        \
+    xvf64gerpp(5, 62, 47);        \
+    xvf64gerpp(6, 60, 46);        \
+    xvf64gerpp(7, 62, 46);    
 
 #define add_and_store_8x8()    \
     xxmfacc(0);                \
@@ -131,38 +141,38 @@
     lxvp(32+26, 5, 416);       \
     lxvp(32+28, 5, 448);       \
     lxvp(32+30, 5, 480);       \
-    xvadddp(32+ 0,  0, 32+ 0); \
-    xvadddp(32+ 1,  1, 32+ 1); \
-    xvadddp(32+ 2,  2, 32+ 2); \
-    xvadddp(32+ 3,  3, 32+ 3); \
-    xvadddp(32+ 4,  4, 32+ 4); \
-    xvadddp(32+ 5,  5, 32+ 5); \
-    xvadddp(32+ 6,  6, 32+ 6); \
-    xvadddp(32+ 7,  7, 32+ 7); \
-    xvadddp(32+ 8,  8, 32+ 8); \
-    xvadddp(32+ 9,  9, 32+ 9); \
-    xvadddp(32+10, 10, 32+10); \
-    xvadddp(32+11, 11, 32+11); \
-    xvadddp(32+12, 12, 32+12); \
-    xvadddp(32+13, 13, 32+13); \
-    xvadddp(32+14, 14, 32+14); \
-    xvadddp(32+15, 15, 32+15); \
-    xvadddp(32+16, 16, 32+16); \
-    xvadddp(32+17, 17, 32+17); \
-    xvadddp(32+18, 18, 32+18); \
-    xvadddp(32+19, 19, 32+19); \
-    xvadddp(32+20, 20, 32+20); \
-    xvadddp(32+21, 21, 32+21); \
-    xvadddp(32+22, 22, 32+22); \
-    xvadddp(32+23, 23, 32+23); \
-    xvadddp(32+24, 24, 32+24); \
-    xvadddp(32+25, 25, 32+25); \
-    xvadddp(32+26, 26, 32+26); \
-    xvadddp(32+27, 27, 32+27); \
-    xvadddp(32+28, 28, 32+28); \
-    xvadddp(32+29, 29, 32+29); \
-    xvadddp(32+30, 30, 32+30); \
-    xvadddp(32+31, 31, 32+31); \
+    xvadddp(33,  3, 33);       \
+    xvadddp(37,  2, 37);       \
+    xvadddp(41,  1, 41);       \
+    xvadddp(45,  0, 45);       \
+    xvadddp(49,  7, 49);       \
+    xvadddp(53,  6, 53);       \
+    xvadddp(57,  5, 57);       \
+    xvadddp(61,  4, 61);       \
+    xvadddp(32, 11, 32);       \
+    xvadddp(36, 10, 36);       \
+    xvadddp(40,  9, 40);       \
+    xvadddp(44,  8, 44);       \
+    xvadddp(48, 15, 48);       \
+    xvadddp(52, 14, 52);       \
+    xvadddp(56, 13, 56);       \
+    xvadddp(60, 12, 60);       \
+    xvadddp(35, 19, 35);       \
+    xvadddp(39, 18, 39);       \
+    xvadddp(43, 17, 43);       \
+    xvadddp(47, 16, 47);       \
+    xvadddp(51, 23, 51);       \
+    xvadddp(55, 22, 55);       \
+    xvadddp(59, 21, 59);       \
+    xvadddp(63, 20, 63);       \
+    xvadddp(34, 27, 34);       \
+    xvadddp(38, 26, 38);       \
+    xvadddp(42, 25, 42);       \
+    xvadddp(46, 24, 46);       \
+    xvadddp(50, 31, 50);       \
+    xvadddp(54, 30, 54);       \
+    xvadddp(58, 29, 58);       \
+    xvadddp(62, 28, 62);       \
     stxvp(32+ 0, 5,   0);      \
     stxvp(32+ 2, 5,  32);      \
     stxvp(32+ 4, 5,  64);      \
@@ -264,32 +274,6 @@
     stxvp(28, 6, 448);      \
     stxvp(30, 6, 480);
 
-void matmul_8x8x64_col_row_with_loads_and_stores
-(
-    double *A,
-    double *B,
-    double *C,
-    double *D
-)
-{
-    li(7, COUNT);
-    asm("mtctr 7");
-    asm("LOOP08:");
-
-    rank_8_update_8x8_first(0);
-    rank_8_update_8x8( 512);
-    rank_8_update_8x8(1024);
-    rank_8_update_8x8(1536);
-    rank_8_update_8x8(2048);
-    rank_8_update_8x8(2560);
-    rank_8_update_8x8(3072);
-    rank_8_update_8x8(3584);
-
-    add_and_store_8x8();
-
-    asm("bdnz LOOP08");
-}
-
 void matmul_8x8xK_col_row
 (
     double *A,
@@ -299,10 +283,12 @@ void matmul_8x8xK_col_row
     int     K
 )
 {
+    zero_8x8();
+
     asm("mtctr 7");
     asm("LOOP01:");
 
-    rank_8_update_8x8_first(0);
+    rank_8_update_8x8(   0);
     rank_8_update_8x8( 512);
     rank_8_update_8x8(1024);
     rank_8_update_8x8(1536);
@@ -361,6 +347,21 @@ double *A = 0;
 double *B = 0;
 double *C = 0;
 
+void print8x8
+(
+    double *A,
+    int32_t d1,
+    int32_t d2
+)
+{
+    for (int i=0; i<8; i++)
+    {
+	for (int j=0; j<8; j++)
+	    std::cout << std::setw(10) << std::fixed << A[i*d1+j*d2] << " ";
+	std::cout << std::endl;
+    }
+}
+
 double run_kernel
 (
     void (kernel)(double*, double*, double*, double*, int),
@@ -369,11 +370,18 @@ double run_kernel
 )
 {
     const uint32_t N = 1024*1024;
-    double *A = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) A[i] = drand48() - 0.5;
-    double *B = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) B[i] = drand48() - 0.5;
-    double *C = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) C[i] = drand48() - 0.5;
-    double *D = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) D[i] = drand48() - 0.5;
+    double *A = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) A[i] = (i < 4096) ? i%8 : 0; // drand48() - 0.5;
+    double *B = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) B[i] = (i < 4096) ? i%8 : 0; // drand48() - 0.5;
+    double *C = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) C[i] = 0; // drand48() - 0.5;
+    double *D = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) D[i] = 0; // drand48() - 0.5;
 
+    if (debug)
+    {
+	std::cout << "A = [" << std::endl; print8x8(A, 1, 8); std::cout << "]" << std::endl;
+	std::cout << "B = [" << std::endl; print8x8(B, 8, 1); std::cout << "]" << std::endl;
+    }
+
+    volatile uint32_t scale = count;
     volatile double start, finish;
 
     start = now();
@@ -382,6 +390,18 @@ double run_kernel
 	kernel(A,B,C,D,k);
     }
     finish = now();
+
+    if (debug)
+    {
+	std::cout << "C = [" << std::endl; print8x8(C, 1, 8); std::cout << "]" << std::endl;
+    }
+
+    for (int i=0; i<8; i++) for (int j=0; j<8; j++)
+    {
+	double S = 0;
+	for (int n=0; n<k*64; n++) S += A[i+n*8]*B[n*8+j];
+	if (C[i+j*8] != S*scale) { std::cout << "Error! " << "C[" << i << "," << j << "] = " << C[i+j*8] << ", S = " << S*scale << std::endl; exit(-1); }
+    }
 
     free(D);
     free(C);
@@ -425,6 +445,7 @@ int main
 
     for (int K=64; K<=512; K+=64)
 	RUN_KERNEL(matmul_8x8xK_col_row      , matmul_8x8xK_col_row_count ,  8, 8, K, 64);
+    exit(-1);
     for (int K=64; K<=512; K+=64)
 	RUN_KERNEL(matmul_8x8xK_col_row_packc, matmul_8x8xK_col_row_count ,  8, 8, K, 64);
 
