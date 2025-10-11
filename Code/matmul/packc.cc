@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 #include <time.h>
 #include <iostream>
 #include <iomanip>
@@ -314,11 +315,12 @@ void matmul_8x8xK_col_row_packc
 )
 {
     packc_8x8();
+    zero_8x8();
 
     asm("mtctr 7");
     asm("LOOP02:");
 
-    rank_8_update_8x8_first(0);
+    rank_8_update_8x8(   0);
     rank_8_update_8x8( 512);
     rank_8_update_8x8(1024);
     rank_8_update_8x8(1536);
@@ -445,7 +447,6 @@ int main
 
     for (int K=64; K<=512; K+=64)
 	RUN_KERNEL(matmul_8x8xK_col_row      , matmul_8x8xK_col_row_count ,  8, 8, K, 64);
-    exit(-1);
     for (int K=64; K<=512; K+=64)
 	RUN_KERNEL(matmul_8x8xK_col_row_packc, matmul_8x8xK_col_row_count ,  8, 8, K, 64);
 
