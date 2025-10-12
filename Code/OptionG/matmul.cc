@@ -7,6 +7,7 @@
 
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef int32_t  s32;
 typedef int64_t  s64;
 
 const u32 COUNT = 1;
@@ -20,7 +21,9 @@ class RV_t
         virtual void vfmacc(u32 vl, u32 vd, double alpha, u32 vs2) = 0;
         virtual void vxor(u32 vd, u32 vs1, u32 vs2) = 0;
         virtual void vle64(u32 vl, u32 vd, double *A) = 0;
+        virtual void vlte64(u32 vl, u32 vd, double *A, u32 stride) = 0;
         virtual void vse64(u32 vl, u32 vs, double *A) = 0;
+        virtual void vste64(u32 vl, u32 vs, double *A, u32 stride) = 0;
         virtual u32& SEW() = 0;
         virtual u32& LMUL() = 0;
         virtual u32& RMUL() = 0;
@@ -179,12 +182,26 @@ class RVIME_t : public RV_t
             for (u32 i=0; i<vl; i++) VR[vd].f64[i] = A[i];
         }
 
+	void vlte64(u32 vl, u32 vd, double *A, u32 stride)
+	{
+	    assert(vl == VLENE());
+	    if (debug > 2) { std::cout << "Loading VR[" << vd << "], vl = " << vl << ", sigma = " << sigma() << ", stride = " << stride << std::endl; }
+	    for (u32 col=0; col < lambda(); col++) for (u32 row=0; row < sigma(); row++) VR[vd].f64[col*sigma() + row] = A[col*stride + row];
+	}
+
         void vse64(u32 vl, u32 vs, double *A)
         {
             assert(vl <= VLENE());
             if (debug > 2) { std::cout << "Storing VR[" << vs << "], vl = " << vl << std::endl; }
             for (u32 i=0; i<vl; i++) A[i] = VR[vs].f64[i];
         }
+
+	void vste64(u32 vl, u32 vs, double *A, u32 stride)
+	{
+	    assert(vl == VLENE());
+	    if (debug > 2) { std::cout << "Storing VR[" << vs << "], vl = " << vl << ", sigma = " << sigma() << ", stride = " << stride << std::endl; }
+	    for (u32 col=0; col < lambda(); col++) for (u32 row=0; row < sigma(); row++) A[col*stride + row] = VR[vs].f64[col*sigma() + row];
+	}
 
         u32 VLENE() const
         {
@@ -297,6 +314,25 @@ class vle64_t
         }
 };
 
+class vlte64_t
+{
+    public:
+	void v(u32 vd, double *A, u32 stride)
+	{
+	    assert(64 == RV->SEW());
+	    assert(1 == RV->LMUL());
+            assert(RV->VL() == RV->VLENE() * RV->LMUL());
+
+            u32 vl = RV->VL();
+            for (u32 i=0; i<RV->LMUL(); i++)
+            {
+                RV->vlte64(min(vl, RV->VLENE()), vd + i, A + i*RV->lambda()*stride, stride);
+                vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
+            }
+            return;
+	}
+};
+
 class vse64_t
 {
     public:
@@ -314,6 +350,25 @@ class vse64_t
         }
 };
 
+class vste64_t
+{
+    public:
+	void v(u32 vs, double *A, u32 stride)
+	{
+	    assert(64 == RV->SEW());
+	    assert(1 == RV->LMUL());
+            assert(RV->VL() == RV->VLENE() * RV->LMUL());
+
+            u32 vl = RV->VL();
+            for (u32 i=0; i<RV->LMUL(); i++)
+            {
+                RV->vste64(min(vl, RV->VLENE()), vs + i, A + i*RV->lambda()*stride, stride);
+                vl = (vl < RV->VLENE()) ? 0 : vl - RV->VLENE();
+            }
+            return;
+	}
+};
+
 vfmmacc_t vfmmacc;
 vfmacc_t  vfmacc;
 vsetvli_t vsetvli;
@@ -321,7 +376,9 @@ vsetvl_t  vsetvl;
 vsetmul_t vsetmul;
 vxor_t    vxor;
 vle64_t   vle64;
+vlte64_t  vlte64;
 vse64_t   vse64;
+vste64_t  vste64;
 
 void microgemm
 (
@@ -368,6 +425,52 @@ void microgemm
     }
 }
 
+void microgemm_nopackc
+(
+    u32     K,
+    double *A,
+    double *B,
+    double  alpha,
+    double *C,
+    s32     gamma,
+    u32     M,
+    u32     N,
+    u32     rmul,
+    u32     cmul
+)
+{
+    assert(0 == K % RV->lambda());                      // For simplicty, K must be a multiple of lambda
+
+    vsetvli(5, 0, 64, 1, true, true);                   // Initialize the vtype register
+    vsetmul(rmul,cmul);                                 // Initialize the RMUL/CMUL registers
+    for (u32 r=16; r<32; r++) vxor.vv(r, r, r);         // T = 0
+    for (u32 k=0; k<K; k=k+RV->lambda())                // Loop over the inner-dimension (K) in steps of lambda
+    {
+        vsetvli(5, 0, 64, RV->RMUL(), true, true);      // An immediate form of vsetvl where LMUL = RMUL
+        vle64.v(0, A);                                  // To be fused with the previous instruction for performance
+        vsetvli(5, 0, 64, RV->CMUL(), true, true);      // An immediate form of vservl where LMUL = CMUL
+        vle64.v(8, B);                                  // To be fused with the previous instruction for performance
+        vfmmacc.vv(16, 0, 8);                           // Perform RMUL*CMUL basic operations
+        A += M * RV->lambda();                          // Advance the A panel pointer
+        B += N * RV->lambda();                          // Advance the B panel pointer
+    }
+    vsetvli(5, 0, 64, 1, true, true);
+    u32 D = RV->VLENE()/(RV->lambda() * RV->lambda());  // D = # of output registers in a basic vfmmacc instruction
+
+    for (u32 r=0; r<16; r++)
+    {
+        u32 block = r/D;
+        u32 col = block/rmul;
+        u32 row = block%rmul;
+        u32 displ = (col*D)*RV->lambda()*gamma + (r%D)*RV->lambda()*gamma + row*RV->sigma();
+        if (debug > 0) std::cout << "Reading VR[" << r << "], col = " << col << ", row = " << row << ", gamma = " << gamma << ", from C[" << displ << "]" << std::endl;
+        vlte64.v(r, C + displ, gamma);
+        vfmacc.vf(r, alpha, r+16);
+        if (debug > 1) std::cout << "Writing VR[" << r << "]  to  C[" << displ << "]" << std::endl;
+        vste64.v(r, C + displ, gamma);
+    }
+}
+
 double now()
 {
     struct timespec ts;
@@ -378,7 +481,9 @@ double now()
 void packfp64
 (
     double *P,
+    const char *Pstr,
     double *A,
+    const char *Astr,
     u32    sigma,
     u32    lambda,
     u32    K,
@@ -396,6 +501,7 @@ void packfp64
             {
                 vle64.v(0, A + i*sigma + j*mu);
                 vse64.v(0, P + i*sigma*lambda + j*sigma); 
+		if (debug > 0) std::cout << "Copying " << Astr << " [" << i*sigma + j*mu << ":+" << sigma << "] to " << Pstr << "[" << i*sigma*lambda + j*sigma << ":+" << sigma << "]" << std::endl;
             }
         A = A + mu*lambda;
         P = P + mu*lambda;
@@ -429,7 +535,7 @@ void unpackfp64
     }
 }
 
-template<u32 VLEN, u32 lambda>
+template<bool packc, u32 VLEN, u32 lambda>
 bool run_microgemm
 (
     u32 K
@@ -451,7 +557,7 @@ bool run_microgemm
         if (cmul > rmul) rmul = rmul*2;
         else cmul = cmul * 2;
     }
-    std::cout << "L = " << std::setw(2) << L << ", lambda = " << std::setw(2) << RV->lambda() << ", sigma = " << std::setw(2) << RV->sigma() << ", RMUL = " << rmul << ", CMUL = " << cmul;
+    std::cout << "packing C = " << packc << ", L = " << std::setw(2) << L << ", lambda = " << std::setw(2) << RV->lambda() << ", sigma = " << std::setw(2) << RV->sigma() << ", RMUL = " << rmul << ", CMUL = " << cmul;
 
     u32 mu = rmul*RV->sigma();
     u32 nu = cmul*RV->sigma();
@@ -467,7 +573,7 @@ bool run_microgemm
     double *A = new double[M*K]; for (u32 i=0; i<M*K; i++) A[i] = drand48() - 0.5;
     double *B = new double[K*N]; for (u32 i=0; i<K*N; i++) B[i] = drand48() - 0.5;
     double *C = new double[M*N]; for (u32 i=0; i<M*N; i++) C[i] = drand48() - 0.5;
-    double *D = new double[M*N]; for (u32 i=0; i<M*N; i++) D[i] = 0.0;
+    double *D = new double[M*N]; for (u32 i=0; i<M*N; i++) D[i] = C[i];
 
     // Allocate the packed panels
     double *Ap = new double[M*K];
@@ -476,17 +582,24 @@ bool run_microgemm
 
     // Pack the A and B panels
     vsetmul(rmul,cmul);
-    packfp64(Ap, A, RV->sigma(), RV->lambda(), K, RV->RMUL());
-    packfp64(Bp, B, RV->sigma(), RV->lambda(), K, RV->CMUL());
+    packfp64(Ap, "Ap", A, "A", RV->sigma(), RV->lambda(), K, RV->RMUL());
+    packfp64(Bp, "Bp", B, "B", RV->sigma(), RV->lambda(), K, RV->CMUL());
 
-    // We also need to pack the C panel
-    packfp64(Cp, C, RV->sigma(), RV->lambda(), N, RV->RMUL());
+    if (packc)
+    {
+	// We also need to pack the C panel
+	packfp64(Cp, "Cp", C, "C", RV->sigma(), RV->lambda(), N, RV->RMUL());
 
-    // Invoke the microgemm kernel
-    microgemm(K, Ap, Bp, alpha, Cp, M, N, rmul, cmul);
+	// Invoke the microgemm kernel
+	microgemm(K, Ap, Bp, alpha, Cp, M, N, rmul, cmul);
 
-    // Unpack the results
-    unpackfp64(D, Cp, RV->sigma(), RV->lambda(), N, RV->RMUL());
+	// Unpack the results
+	unpackfp64(D, Cp, RV->sigma(), RV->lambda(), N, RV->RMUL());
+    }
+    else
+    {
+	microgemm_nopackc(K, Ap, Bp, alpha, D, M, M, N, rmul, cmul);
+    }
 
     // Check the result
     for (u32 j=0; j<N; j++)
@@ -529,37 +642,37 @@ int main
 )
 {
     std::cout << "=========================================================================================================================" << std::endl;
-    run_microgemm<  64, 1>(1);
-    run_microgemm<  64, 1>(2);
-    run_microgemm<  64, 1>(4);
-    run_microgemm<  64, 1>(8);
-    run_microgemm< 128, 1>(1);
-    run_microgemm< 128, 1>(2);
-    run_microgemm< 128, 1>(4);
-    run_microgemm< 128, 1>(8);
-    run_microgemm< 256, 1>(1);
-    run_microgemm< 256, 1>(2);
-    run_microgemm< 256, 1>(4);
-    run_microgemm< 256, 1>(8);
-    run_microgemm< 256, 2>(2);
-    run_microgemm< 256, 2>(4);
-    run_microgemm< 256, 2>(8);
-    run_microgemm< 512, 1>(1);
-    run_microgemm< 512, 1>(2);
-    run_microgemm< 512, 1>(4);
-    run_microgemm< 512, 1>(8);
-    run_microgemm< 512, 2>(2);
-    run_microgemm< 512, 2>(4);
-    run_microgemm< 512, 2>(8);
-    run_microgemm<1024, 1>(1);
-    run_microgemm<1024, 1>(2);
-    run_microgemm<1024, 1>(4);
-    run_microgemm<1024, 1>(8);
-    run_microgemm<1024, 2>(2);
-    run_microgemm<1024, 2>(4);
-    run_microgemm<1024, 2>(8);
-    run_microgemm<1024, 4>(4);
-    run_microgemm<1024, 4>(8);
+    run_microgemm<true,   64, 1>(1); run_microgemm<false,   64, 1>(1);
+    run_microgemm<true,   64, 1>(2); run_microgemm<false,   64, 1>(2);
+    run_microgemm<true,   64, 1>(4); run_microgemm<false,   64, 1>(4);
+    run_microgemm<true,   64, 1>(8); run_microgemm<false,   64, 1>(8);
+    run_microgemm<true,  128, 1>(1); run_microgemm<false,  128, 1>(1);
+    run_microgemm<true,  128, 1>(2); run_microgemm<false,  128, 1>(2);
+    run_microgemm<true,  128, 1>(4); run_microgemm<false,  128, 1>(4);
+    run_microgemm<true,  128, 1>(8); run_microgemm<false,  128, 1>(8);
+    run_microgemm<true,  256, 1>(1); run_microgemm<false,  256, 1>(1);
+    run_microgemm<true,  256, 1>(2); run_microgemm<false,  256, 1>(2);
+    run_microgemm<true,  256, 1>(4); run_microgemm<false,  256, 1>(4);
+    run_microgemm<true,  256, 1>(8); run_microgemm<false,  256, 1>(8);
+    run_microgemm<true,  256, 2>(2); run_microgemm<false,  256, 2>(2);
+    run_microgemm<true,  256, 2>(4); run_microgemm<false,  256, 2>(4);
+    run_microgemm<true,  256, 2>(8); run_microgemm<false,  256, 2>(8);
+    run_microgemm<true,  512, 1>(1); run_microgemm<false,  512, 1>(1);
+    run_microgemm<true,  512, 1>(2); run_microgemm<false,  512, 1>(2);
+    run_microgemm<true,  512, 1>(4); run_microgemm<false,  512, 1>(4);
+    run_microgemm<true,  512, 1>(8); run_microgemm<false,  512, 1>(8);
+    run_microgemm<true,  512, 2>(2); run_microgemm<false,  512, 2>(2);
+    run_microgemm<true,  512, 2>(4); run_microgemm<false,  512, 2>(4);
+    run_microgemm<true,  512, 2>(8); run_microgemm<false,  512, 2>(8);
+    run_microgemm<true, 1024, 1>(1); run_microgemm<false, 1024, 1>(1);
+    run_microgemm<true, 1024, 1>(2); run_microgemm<false, 1024, 1>(2);
+    run_microgemm<true, 1024, 1>(4); run_microgemm<false, 1024, 1>(4);
+    run_microgemm<true, 1024, 1>(8); run_microgemm<false, 1024, 1>(8);
+    run_microgemm<true, 1024, 2>(2); run_microgemm<false, 1024, 2>(2);
+    run_microgemm<true, 1024, 2>(4); run_microgemm<false, 1024, 2>(4);
+    run_microgemm<true, 1024, 2>(8); run_microgemm<false, 1024, 2>(8);
+    run_microgemm<true, 1024, 4>(4); run_microgemm<false, 1024, 4>(4);
+    run_microgemm<true, 1024, 4>(8); run_microgemm<false, 1024, 4>(8);
 
     return 0;
 }
