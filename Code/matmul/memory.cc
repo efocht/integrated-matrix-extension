@@ -2,6 +2,8 @@
 #include <time.h>
 #include <iostream>
 #include <iomanip>
+#include <omp.h>
+#include <vector>
 
 // helper macros
 #define EXPAND(x)  _EXPAND(x)
@@ -66,19 +68,33 @@ double run_kernel
     volatile uint32_t n
 )
 {
-    double *A = (double*)aligned_alloc(4096, sizeof(double) * N); for (uint32_t i=0; i<N; i++) A[i] = drand48() - 0.5;
+    int nthreads = omp_get_max_threads();
+    std::vector<double*> A(nthreads);
+    for (int j=0; j<nthreads; j++)
+    {
+	A[j] = (double*)aligned_alloc(4096, sizeof(double) * N); 
+	for (uint32_t i=0; i<N; i++) A[j][i] = drand48() - 0.5;
+    }
     uint32_t r = N/n;
 
     volatile double start, finish;
 
     start = now();
-    for(; count; count--)
+#pragma omp parallel for
+    for (int j=0; j<nthreads; j++)
     {
-	kernel(A, r);
+	uint32_t reps = count;
+	for(; reps; reps--)
+	{
+	    kernel(A[j], r);
+	}
     }
     finish = now();
 
-    free(A);
+    for (int j=0; j<nthreads; j++)
+    {
+	free(A[j]);
+    }
 
     return (finish - start);
 }
@@ -93,7 +109,7 @@ void run_kernel_and_report
 )
 {
     volatile double elapsed;
-    volatile double GB = (1.0e-09)*N*sizeof(double)*count;
+    volatile double GB = (1.0e-09)*N*sizeof(double)*count*omp_get_max_threads();
     elapsed = run_kernel(kernel, count, N, n);
     std::cout << std::setprecision(6);
     std::cout << "Time to run " << std::setw(30) << name << " (" << std::setw(9) << N << ") " << std::setw(6) << count << " times = " << std::setw(10) << std::fixed << elapsed << " seconds (" << std::setw(10) << std::scientific << GB/elapsed << " GB/s)" << std::endl;
@@ -112,6 +128,7 @@ int main
     volatile double elapsed;
     
     std::cout << "=========================================================================================================================" << std::endl;
+    std::cout << "Running on " << omp_get_max_threads() << " threads" << std::endl;
 
     for (uint32_t i=1; i<1000000; i *= 2) 
 	RUN_KERNEL(memory_load_1KiB, memory_load_count/i, i*1024, 128);
