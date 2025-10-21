@@ -1,12 +1,15 @@
 CC  = gcc
 CXX = g++
 
-all : matmul matmul.s matmul.out
+all : matmul matmul.s matmul.out matmult matmult.s matmult.out
 
 matmul.out : matmul
 	perf stat -d -d -d numactl -C 8 ./matmul 2>&1 | tee -a matmul.out
 
-matmul : matmul.o
+matmul_v2.out : matmul_v2
+	./matmul_v2 2>&1 | tee -a matmul_v2.out
+
+% : %.o
 	$(CXX) $< -o $@
 
 memory : memory.o
@@ -21,3 +24,4 @@ memory : memory.o
 
 clean :
 	rm -rf matmul.out matmul.s matmul.o matmul.trace matmul
+	rm -rf matmult.out matmult.s matmult.o matmult.trace matmult
